@@ -1,0 +1,44 @@
+Train the High and Low Resolution Classifiers:
+HR:
+python classifier_training.py --model R32_C10 --batch_size 64 --max_epochs 10 --parallel --test_interval 10
+LR:
+python classifier_training.py --batch_size 64 --max_epochs 10 --mode lr --img_size 8 --parallel
+
+Pre-train the Policy Network:
+python pretrain.py --model R32_C10 --ckpt_hr_cl cv/tmp/ckpt_E_5_A_0.810 --batch_size 64 --max_epochs 10 --parallel
+
+Finetune Policy Network and High Resolution Classifier (using HR classification only):
+python finetune.py --ckpt_hr_cl cv/tmp/ckpt_E_5_A_0.810 --load cv/tmp/ckpt_E_5_A_0.728_R_2.48E-01 --batch_size 64 --max_epochs 11 --parallel
+
+Finetune Policy Network and High Resolution Classifiers (using HR and LR streams):
+python finetune2stream.py --ckpt_lr_cl cv/tmp/LR_ckpt_E_5_A_0.551 --load cv/tmp/ckpt_E_10_A_0.866_R_-1.03 --batch_size 64 --max_epochs 10
+
+
+Landsat-8 [1st experiment (118 samples)]:
+
+python classifier_training.py --model R32_Landsat-8 --batch_size 32 --max_epochs 21 --mode hr --parallel --img_size 64 --test_interval 5
+
+python classifier_training.py --model R32_Landsat-8 --batch_size 32 --max_epochs 21 --mode lr --parallel --img_size 16 --test_interval 5
+
+python pretrain.py --model R32_Landsat-8 --ckpt_hr_cl cv/tmp/Landsat-8/HR_ckpt_E_20_train_acc_0.991 --batch_size 32 --max_epochs 11 --parallel --lr_size 16
+
+python finetune.py --model R32_Landsat-8 --ckpt_hr_cl cv/tmp/Landsat-8/HR_ckpt_E_20_train_acc_0.991 --load cv/tmp/Landsat-8/Policy_ckpt_E_10_train_0.95_test_acc_0.667_R_2.86E-01 --batch_size 32 --max_epochs 10 --parallel --lr_size 16
+
+python finetune2stream.py --model R32_Landsat-8 --ckpt_lr_cl cv/tmp/Landsat-8/LR_ckpt_E_20_train_acc_0.948 --load cv/tmp/Landsat-8/Ftune_ckpt_E_10_train_0.97_test_0.944_R_8.77E-02 --batch_size 32 --max_epochs 21 --lr_size 16 --test_interval 10
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
