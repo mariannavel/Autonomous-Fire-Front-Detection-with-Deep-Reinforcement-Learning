@@ -1,1 +1,1 @@
-# PatchDrop-with-Semantic-Image-Segmentation
+# PatchDrop with Semantic Image Segmentation
