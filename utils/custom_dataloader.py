@@ -51,7 +51,7 @@ class LandsatDataset(Dataset):
             dataset = pickle.load(f)
         self.data = dataset["data"]
         self.targets = dataset["targets"]
-        self.num_examples = len(self.data)  # 118 images
+        self.num_examples = len(self.data)
     def __getitem__(self, index):
         return self.data[index], self.targets[index]
     def __len__(self):

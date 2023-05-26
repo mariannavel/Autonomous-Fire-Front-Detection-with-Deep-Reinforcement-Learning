@@ -1,6 +1,6 @@
 import os
-import re
 import torch
+import torch.nn as nn
 import torchvision.transforms as transforms
 import torchvision.datasets as torchdata
 import torchvision.models as torchmodels
@@ -16,12 +16,13 @@ def save_args(__file__, args):
     with open(args.cv_dir+'/args.txt','w') as f:
         f.write(str(args))
 
-def performance_stats(policies, rewards, matches):
+def performance_stats(policies, rewards):
     # Print the performace metrics including the average reward, average number
     # and variance of sampled num_patches, and number of unique policies
     policies = torch.cat(policies, 0)
+    # rewards = torch.tensor(rewards)
     rewards = torch.cat(rewards, 0)
-    accuracy = torch.cat(matches, 0).mean()
+    # accuracy = torch.cat(matches, 0).mean()
 
     reward = rewards.mean()
     num_unique_policy = policies.sum(1).mean()
@@ -30,7 +31,7 @@ def performance_stats(policies, rewards, matches):
     policy_set = [p.cpu().numpy().astype(np.int).astype(np.str) for p in policies]
     policy_set = set([''.join(p) for p in policy_set])
 
-    return accuracy, reward, num_unique_policy, variance, policy_set
+    return reward, num_unique_policy, variance, policy_set
 
 def compute_reward(preds, targets, policy, penalty):
     # Reward function favors policies that drops patches only if the classifier
@@ -138,9 +139,9 @@ def action_space_model(dset):
 # Pick from the datasets available and the hundreds of models we have lying around depending on the requirements.
 def get_dataset(model, root='data/'):
     
-    if model=='R32_Landsat-8':
-        trainset = LandsatDataset(root+'Landsat-8/train.pkl')
-        testset = LandsatDataset(root+'Landsat-8/test.pkl')
+    if model=='R_Landsat8':
+        trainset = LandsatDataset(root+'train.pkl')
+        testset = LandsatDataset(root+'test.pkl')
     else:
         rnet, dset = model.split('_')
         transform_train, transform_test = get_transforms(rnet, dset) # edw mporw na kanw resize tis eikones
@@ -190,9 +191,12 @@ def get_model(model):
         rnet_lr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 7, 62)
         agent = resnet_in.ResNet(resnet_in.BasicBlock, [2,2,2,2], 3, 16)
 
-    elif model=='R32_Landsat-8':
+    elif model=='R_Landsat8':
         rnet_hr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 2)
         rnet_lr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 2)
         agent = resnet_in.ResNet(resnet_in.BasicBlock, [2,2,2,2], 16)
 
     return rnet_hr, rnet_lr, agent
+
+# def keras2pytorch_model(keras_model, pytorch_model):
+
