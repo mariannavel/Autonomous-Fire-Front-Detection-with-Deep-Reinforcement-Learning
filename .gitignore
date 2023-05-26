@@ -2,3 +2,8 @@ data
 cv
 models/__pycache__/
 utils/__pycache__/
+__pycache__/
+.idea/
+patchdrop_seg_train_results
+pytorch_unet.pt
+later...
