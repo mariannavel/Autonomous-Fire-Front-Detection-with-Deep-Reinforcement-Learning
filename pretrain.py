@@ -23,7 +23,7 @@ from torch.distributions import Multinomial, Bernoulli
 from utils import utils
 from Seg_models_pytorch import get_model_pytorch
 # from Seg_models import get_model_keras
-from visualize import visualize_with_seg_mask
+from visualize import visualize_with_seg_mask, visualize_images
 # from torchsummary import summary
 import torch.backends.cudnn as cudnn
 
@@ -158,10 +158,10 @@ def train(epoch):
         baseline_actions[baseline_actions>=0.5] = 1.0
 
         # Agent sampled high resolution images
-        inputs_baseline = utils.agent_chosen_input(inputs_baseline, baseline_actions, mappings, patch_size)
+        inputs_baseline = utils.get_agent_masked_image(inputs_baseline, baseline_actions, mappings, patch_size)
 
-        inputs_sample = utils.agent_chosen_input(inputs_sample, agent_actions.int(), mappings, patch_size)
-        # agent_chosen_input: get patches of input based on policy arg 2
+        inputs_sample = utils.get_agent_masked_image(inputs_sample, agent_actions.int(), mappings, patch_size)
+        # get_agent_masked_image(): get patches of input based on policy arg 2
 
         # --POLICY NETWORK DONE--
 
@@ -247,7 +247,7 @@ def test(epoch):
         policy[policy>=0.5] = 1.0
 
         # Get the masked high-res image and perform inference
-        inputs = utils.agent_chosen_input(inputs, policy, mappings, patch_size)
+        inputs = utils.get_agent_masked_image(inputs, policy, mappings, patch_size)
         preds = get_SegNet_prediction(inputs)
 
         preds = torch.from_numpy(preds)
@@ -262,7 +262,7 @@ def test(epoch):
     reward, sparsity, variance, policy_set, dice = utils.performance_stats(policies, rewards, dice_coef)
     torch.cuda.empty_cache()
 
-    print('Test - Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f | samples: %d\n'%(reward, dice, sparsity, variance, len(policy_set)))
+    print('Test - Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f\n'%(reward, dice, sparsity, variance))
     # log_value('test_accuracy', accuracy, epoch)
     # log_value('test_reward', reward, epoch)
     # log_value('test_sparsity', sparsity, epoch)
@@ -279,18 +279,6 @@ def test(epoch):
     }
     # torch.save(state, args.cv_dir+'Landsat-8/Policy_ckpt_E_%d_dice_%.3f_R_%.3f'%(epoch, dice, reward))
 
-
-def visualize_images(images, masks, title):
-    # ndarray: n x 256 x 256 x 3
-    # 1, 4, 6, 9, 10, 13, 19, 21, 26, 33, 38, 42, 55, 58, 66, 67 --> fire present (train)
-    # 69, 70, 78, 80, 82 -> fire present (test)
-    for i, (img, msk) in enumerate(zip(images, masks)):
-        plt.subplot(1, 2, 1)
-        plt.imshow(img)
-        plt.subplot(1, 2, 2)
-        plt.imshow(msk)
-        plt.suptitle(title)
-        plt.show()
 
 #--------------------------------------------------------------------------------------------------------#
 trainset, testset = utils.get_dataset(args.model, args.data_dir)
@@ -320,7 +308,7 @@ print('U-Net loaded!')
 
 # 3. Load the weights (trained on voting scheme)
 # keras_unet.load_weights(WEIGHTS_FILE)
-pytorch_unet.load_state_dict(torch.load('pytorch_unet.pt'))
+pytorch_unet.load_state_dict(torch.load('cv/tmp/Landsat-8/unet/pytorch_unet.pt'))
 pytorch_unet.eval()
 print('U-Net weights loaded!')
 
@@ -346,14 +334,14 @@ optimizer = optim.Adam(agent.parameters(), lr=args.lr)
 exp_return = []
 start_epoch = 1
 
-# OTAN TO TREXEIS ME POLLA DATA EPANEFERE TO BATCHNORM
+# OTAN TO TREXEIS ME > 1 image sto batch EPANEFERE TO BATCHNORM
 for epoch in range(start_epoch, start_epoch+args.max_epochs):
     train(epoch)
     if epoch % args.test_interval == 0:
         test(epoch)
 
 # exp_return = sum(exp_return)/len(exp_return)
-torch.save(agent.state_dict(), f"checkpoints/agent_{len(trainset)}_fire_present_images_{args.max_epochs}_epochs.pt")
+torch.save(agent.state_dict(), f"checkpoints/PN_{len(trainset)}_train_images_{args.max_epochs}_epochs.pt")
 
 plt.figure()
 plt.semilogy(exp_return)

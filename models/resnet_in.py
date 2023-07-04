@@ -41,11 +41,12 @@ class BasicBlock(nn.Module):
         identity = x
 
         out = self.conv1(x)
-        out = self.bn1(out)
+        if out.shape[0] > 1:  # batch size
+            out = self.bn1(out)
         out = self.relu(out)
-
         out = self.conv2(out)
-        out = self.bn2(out)
+        if out.shape[0] > 1:  # batch size
+            out = self.bn2(out)
 
         if self.downsample is not None:
             identity = self.downsample(x)
@@ -183,7 +184,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_impl(self, x, dset, mode):
+    def _forward_impl(self, x):
         # See note [TorchScript super()]
         x = self.conv1(x)
         x = self.bn1(x) # when testing model for 1 sample we don't need (and cannot apply) bn
@@ -193,7 +194,8 @@ class ResNet(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        x = self.layer4(x) # comment out to test with one image / changed also line 144 and removed all bn layers
+        if x.shape[0] > 1:
+            x = self.layer4(x) # skip it when test with one image / changed also line 144 and removed all bn layers
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
@@ -201,8 +203,8 @@ class ResNet(nn.Module):
 
         return x
 
-    def forward(self, x, dset, mode):
-        return self._forward_impl(x, dset, mode)
+    def forward(self, x):
+        return self._forward_impl(x)
 
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):

@@ -102,7 +102,7 @@ def get_transforms(rnet, dset):
 
     return transform_train, transform_test
 
-def agent_chosen_input(input_org, policy, mappings, patch_size):
+def get_agent_masked_image(input_org, policy, mappings, patch_size):
     """ Generate masked images w.r.t policy learned by the agent.
     """
     input_full = input_org.clone()
