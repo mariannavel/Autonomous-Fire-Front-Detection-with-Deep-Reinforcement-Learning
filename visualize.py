@@ -4,10 +4,13 @@ from utils import utils
 import matplotlib.pyplot as plt
 import numpy as np
 
-def save_image(img, name):
-    plt.imshow(img)
-    plt.axis(False)
-    plt.savefig(name)
+from Seg_generator import *
+
+IMG_PATH = 'data/images/'
+MSK_PATH = 'data/voting_masks'
+
+MAX_PIXEL_VALUE = 65535 # used to normalize the image
+TH_FIRE = 0.25 # fire threshold
 
 def plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR, I_HR_patch, M_HR_patch):
     """
@@ -62,12 +65,6 @@ def visualize_masked_imgs(model):
 
     mappings, img_size, patch_size = utils.action_space_model(model.split('_')[1])
 
-    # ckpt_hr_and_agent = "cv/tmp/ckpt_E_10_A_0.866_R_-1.03"
-    # ckpt_lr = torch.load("cv/tmp/LR_ckpt_E_5_A_0.551")
-    # rnet_lr.load_state_dict(ckpt_lr['state_dict'])
-    # checkpoint = torch.load(ckpt_hr_and_agent)
-    # rnet_hr.load_state_dict(checkpoint['resnet_hr'])
-    # agent.load_state_dict(checkpoint['agent'])
     ckpt_2stream = torch.load("cv/tmp/Landsat-8/F2Stream_ckpt_E_30_train_0.98_test_0.944_R_1.32E-01")
     agent.load_state_dict(ckpt_2stream['agent'])
 
@@ -106,4 +103,56 @@ def visualize_masked_imgs(model):
                 # plt.show()
             break
 
-# visualize_masked_imgs("R32_Landsat-8")
+def visualize_image3c_with_mask():
+    img_filelist = sorted(os.listdir(IMG_PATH))
+    msk_filelist = sorted(os.listdir(MSK_PATH))
+    for fn_img, fn_mask in zip(img_filelist, msk_filelist):
+
+        img = os.path.join(IMG_PATH, fn_img)
+        img3c = get_img_762bands(img) # 3 channels
+        mask = get_mask_arr(os.path.join(MSK_PATH, fn_mask))
+
+        plt.subplot(1, 2, 1)
+        plt.imshow(img3c)
+        plt.title('Original image 3c')
+
+        plt.subplot(1, 2, 2)
+        plt.imshow(mask)
+        plt.title('Voting mask (target)')
+
+        plt.show()
+
+def visualize_with_seg_mask(img3c, mask):
+    # permute for visualization purposes
+    img3c = img3c.float().permute(2, 1, 0)
+    mask = mask.float().permute(2, 1, 0)
+    # mask = torch.unsqueeze(mask[0] > 0, dim=0) # make it binary
+    mask = mask > TH_FIRE
+    plt.subplot(1, 2, 1)
+    plt.imshow(img3c.detach().numpy())
+    plt.title('Original image 3c')
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(mask.detach().numpy())
+    plt.title('Voting mask (target)')
+
+    plt.show()
+
+def baseline_vs_agent_sampling(orig, env1, env2):
+    env1 = env1.float().permute(2, 1, 0)
+    env2 = env2.float().permute(2, 1, 0)
+    orig = orig.float().permute(2, 1, 0)
+
+    plt.subplot(1, 3, 1)
+    plt.imshow(orig.detach().numpy())
+    plt.title('Original image')
+
+    plt.subplot(1, 3, 2)
+    plt.imshow(env1.detach().numpy())
+    plt.title('Baseline actions')
+
+    plt.subplot(1, 3, 3)
+    plt.imshow(env2.detach().numpy())
+    plt.title('Sampled actions')
+
+    plt.show()
