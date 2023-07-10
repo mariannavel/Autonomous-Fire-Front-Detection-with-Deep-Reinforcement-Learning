@@ -20,19 +20,20 @@ def performance_stats(policies, rewards, dice_coef):
     # Print the performace metrics including the average reward, average number
     # and variance of sampled num_patches, and number of unique policies
     policies = torch.cat(policies, 0)
-    # rewards = torch.tensor(rewards)
     rewards = torch.cat(rewards, 0)
+    dice_coefs = torch.cat(dice_coef, 0)
     # accuracy = torch.cat(matches, 0).mean()
 
     reward = rewards.mean()
-    dice_coef = sum(dice_coef)/len(dice_coef)
-    num_unique_policy = policies.sum(1).mean()
+    dice_coef = dice_coefs.mean()
+
+    avg_selected_patches = policies.sum(1).mean()
     variance = policies.sum(1).std()
-    # posa einai ta policies ?? prepei oso to batch size!
+    # posa einai ta policies ??
     policy_set = [p.cpu().numpy().astype(np.int).astype(np.str) for p in policies]
     policy_set = set([''.join(p) for p in policy_set])
 
-    return reward, num_unique_policy, variance, policy_set, dice_coef
+    return reward, dice_coef, avg_selected_patches, variance
 
 def compute_reward(preds, targets, policy, penalty):
     # Reward function favors policies that drops patches only if the classifier
@@ -66,7 +67,7 @@ def get_transforms(rnet, dset):
             transforms.Normalize(mean, std)
             ])
 
-    elif dset=='ImgNet':
+    elif dset=='ImgNet' or dset=='Landsat8':
         mean = [0.485, 0.456, 0.406]
         std = [0.229, 0.224, 0.225]
         transform_train = transforms.Compose([
@@ -126,7 +127,7 @@ def action_space_model(dset):
     elif dset == 'ImgNet':
         img_size = 224
         patch_size = 56
-    elif dset == 'Landsat-8':
+    elif dset == 'Landsat8':
         img_size = 256
         patch_size = 64 # 64×64×16 = 256x256
 
@@ -139,26 +140,25 @@ def action_space_model(dset):
 
 # Pick from the datasets available and the hundreds of models we have lying around depending on the requirements.
 def get_dataset(model, root='data/'):
-    
-    if model=='R_Landsat8':
-        trainset = LandsatDataset(root+'train85.pkl')
-        testset = LandsatDataset(root+'test15.pkl')
-    else:
-        rnet, dset = model.split('_')
-        transform_train, transform_test = get_transforms(rnet, dset) # edw mporw na kanw resize tis eikones
 
-        if dset=='C10':
-            trainset = torchdata.CIFAR10(root=root, train=True, download=True, transform=transform_train)
-            testset = torchdata.CIFAR10(root=root, train=False, download=True, transform=transform_test)
-        elif dset=='C100':
-            trainset = torchdata.CIFAR100(root=root, train=True, download=True, transform=transform_train)
-            testset = torchdata.CIFAR100(root=root, train=False, download=True, transform=transform_test)
-        elif dset=='ImgNet':
-            trainset = torchdata.ImageFolder(root+'/ImageNet/train/', transform_train)
-            testset = torchdata.ImageFolder(root+'/ImageNet/test/', transform_test)
-        elif dset=='fMoW':
-            trainset = CustomDatasetFromImages(root+'/fMoW/train.csv', transform_train)
-            testset = CustomDatasetFromImages(root+'/fMoW/test.csv', transform_test)
+    rnet, dset = model.split('_')
+    transform_train, transform_test = get_transforms(rnet, dset) # edw mporw na kanw resize tis eikones
+
+    if dset=='Landsat8':
+        trainset = LandsatDataset(root + 'train85.pkl')
+        testset = LandsatDataset(root + 'test15.pkl')
+    elif dset=='C10':
+        trainset = torchdata.CIFAR10(root=root, train=True, download=True, transform=transform_train)
+        testset = torchdata.CIFAR10(root=root, train=False, download=True, transform=transform_test)
+    elif dset=='C100':
+        trainset = torchdata.CIFAR100(root=root, train=True, download=True, transform=transform_train)
+        testset = torchdata.CIFAR100(root=root, train=False, download=True, transform=transform_test)
+    elif dset=='ImgNet':
+        trainset = torchdata.ImageFolder(root+'/ImageNet/train/', transform_train)
+        testset = torchdata.ImageFolder(root+'/ImageNet/test/', transform_test)
+    elif dset=='fMoW':
+        trainset = CustomDatasetFromImages(root+'/fMoW/train.csv', transform_train)
+        testset = CustomDatasetFromImages(root+'/fMoW/test.csv', transform_test)
     
     # print(type(trainset))
     return trainset, testset
@@ -167,7 +167,15 @@ def get_model(model):
 
     from models import resnet_cifar, resnet_in
 
-    if model=='R32_C10':
+    if model == 'CNN_Landsat8':
+        agent = resnet_in.CNNPolicy()
+
+    elif model == 'ResNet_Landsat8':
+        # rnet_hr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 2)
+        # rnet_lr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 2)
+        agent = resnet_in.ResNet(resnet_in.BasicBlock, [1, 1, 1, 1], 16)  # block, layers, num_classes
+
+    elif model=='R32_C10':
         # [3,4,6,3] -> 3 blocks sto 1o layer, 4 blocks sto 2o, k.o.k
         # 3 -> kernel size pou tha efarmostei sto arxiko input
         # 10 -> number of classes
@@ -191,11 +199,6 @@ def get_model(model):
         rnet_hr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 7, 62)
         rnet_lr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 7, 62)
         agent = resnet_in.ResNet(resnet_in.BasicBlock, [2,2,2,2], 3, 16)
-
-    elif model=='Landsat8_ResNet':
-        # rnet_hr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 2)
-        # rnet_lr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 2)
-        agent = resnet_in.ResNet(resnet_in.BasicBlock, [1,1,1,1], 16) # block, layers, num_classes
 
     return agent # rnet_hr, rnet_lr,
 

@@ -108,7 +108,7 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
+    def __init__(self, block, layers, num_classes=16, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None):
         super(ResNet, self).__init__()
@@ -200,6 +200,7 @@ class ResNet(nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
+        x = torch.sigmoid(x)
 
         return x
 
@@ -254,3 +255,27 @@ def resnet101(pretrained=False, progress=True, **kwargs):
     """
     return _resnet('resnet101', Bottleneck, [3, 4, 23, 3], pretrained, progress,
                    **kwargs)
+
+
+class CNNPolicy(nn.Module):
+    def __init__(self, num_classes=16):
+        super(CNNPolicy, self).__init__()
+        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.relu = nn.ReLU()
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.fc = nn.Linear(64 * 4 * 4, num_classes)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.relu(self.conv1(x))
+        x = self.pool(x)
+        x = self.relu(self.conv2(x))
+        x = self.pool(x)
+        x = self.relu(self.conv3(x))
+        x = self.pool(x)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
+        x = self.sigmoid(x)
+        return x

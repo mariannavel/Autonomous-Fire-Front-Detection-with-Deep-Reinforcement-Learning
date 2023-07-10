@@ -22,6 +22,8 @@ def visualize_images(images, masks, title=''):
         plt.subplot(1, 2, 2)
         plt.imshow(msk)
         plt.suptitle(title)
+        plt.axis('off')
+        plt.tight_layout()
         plt.show()
 
 def plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR, I_HR_patch, M_HR_patch):
