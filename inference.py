@@ -19,7 +19,8 @@ def inference(images, mappings, patch_size):
     input_agent = torch.nn.functional.interpolate(input_agent, (LR_size, LR_size))
 
     # get the probability distribution output of PN
-    probs = torch.sigmoid(PolicyNetwork(input_agent))
+    # probs = torch.sigmoid(PolicyNetwork(input_agent))
+    probs = PolicyNetwork(input_agent)
 
     # Sample the test-time policy
     policy = probs.data.clone()
@@ -57,13 +58,13 @@ def load_images(num, datapath):
 
 test_images, seg_masks = load_images(num_test, 'data/train85.pkl')
 
-PolicyNetwork = utils.get_model('Landsat8_ResNet')
-state_dict = torch.load(f"checkpoints/PN_85_train_images_100_epochs.pt")
-PolicyNetwork.load_state_dict(state_dict)
+PolicyNetwork = utils.get_model('ResNet_Landsat8')
+state_dict = torch.load(f"checkpoints/Policy_ckpt_E_650_R_0.533_Res")
+PolicyNetwork.load_state_dict(state_dict["agent"])
 print("Loaded the trained agent!")
 
 # get agent action space
-mappings, _, patch_size = utils.action_space_model('Landsat-8')
+mappings, _, patch_size = utils.action_space_model('Landsat8')
 
 masked_images = inference(test_images, mappings, patch_size)
 

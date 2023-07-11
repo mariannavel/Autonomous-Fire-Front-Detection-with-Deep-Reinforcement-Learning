@@ -36,14 +36,14 @@ WEIGHTS_FILE ='cv/tmp/Landsat-8/unet/model_unet_voting_final_weights.h5'
 
 import argparse
 parser = argparse.ArgumentParser(description='Policy Network Finetuning-I')
-parser.add_argument('--lr', type=float, default=1e-2, help='learning rate')
+parser.add_argument('--lr', type=float, default=1e-3, help='learning rate') # DECREASED lr 0.01 --> 0.001
 parser.add_argument('--model', default='ResNet_Landsat8', help='R<depth>_<dataset> see utils.py for a list of configurations')
 parser.add_argument('--ckpt_hr_cl', help='checkpoint directory for the high resolution classifier')
 parser.add_argument('--data_dir', default='data/', help='data directory')
-parser.add_argument('--load', default=None, help='checkpoint to load agent from')
+parser.add_argument('--load', default="checkpoints/Policy_ckpt_E_100_R_0.436_Res", help='checkpoint to load agent from')
 parser.add_argument('--cv_dir', default='cv/tmp/', help='checkpoint directory (models and logs are saved here)')
-parser.add_argument('--batch_size', type=int, default=8, help='batch size')
-parser.add_argument('--max_epochs', type=int, default=100, help='total epochs to run')
+parser.add_argument('--batch_size', type=int, default=16, help='batch size') # INCREASED batch size 8 --> 16
+parser.add_argument('--max_epochs', type=int, default=900, help='total epochs to run')
 parser.add_argument('--parallel', action ='store_true', default=False, help='use multiple GPUs for training')
 parser.add_argument('--penalty', type=float, default=-0.5, help='to penalize the PN for incorrect predictions')
 parser.add_argument('--alpha', type=float, default=0.8, help='probability bounding factor')
@@ -206,9 +206,9 @@ def train(epoch):
         dice_coefs.append(dice.cpu())
 
         # Save the final states (one epoch, 16 images)
-        if epoch % 10 == 0:
+        # if epoch % 10 == 0:
             # dropped = str(16-sum(agent_actions[0].int()).item()) # at zero position is the only one image
-            save_masked_img_grid(epoch, batch_idx, inputs_sample, "training")
+            # save_masked_img_grid(epoch, batch_idx, inputs_sample, "training")
             # plt.imsave("action_progress/Epoch" + str(epoch) + "_patches_dropped_" + dropped + ".jpg",
             #            inputs_sample[0].permute(1, 2, 0).cpu().numpy())
 
@@ -218,6 +218,7 @@ def train(epoch):
     # torch.cuda.empty_cache()
     print('Train: %d | Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f'%(epoch, avg_reward, avg_dice, sparsity, variance))
 
+    # add function print stats ... log values
     # log_value('train_accuracy', accuracy, epoch)
     # log_value('train_reward', reward, epoch)
     # log_value('train_sparsity', sparsity, epoch)
@@ -264,7 +265,7 @@ def test(epoch):
         policies.append(policy.data)
         dice_coef.append(dice)
 
-        save_masked_img_grid(epoch, batch_idx, inputs, "validation")
+        # save_masked_img_grid(epoch, batch_idx, inputs, "validation")
 
     avg_reward, avg_dice, sparsity, variance = utils.performance_stats(policies, rewards, dice_coef)
     torch.cuda.empty_cache()
@@ -277,26 +278,25 @@ def test(epoch):
     # log_value('test_unique_policies', len(policy_set), epoch)
 
     # Save the Policy Network - Classifier is fixed in this phase
-    agent_state_dict = agent.module.state_dict() if args.parallel else agent.state_dict()
-    state = {
-      'agent': agent_state_dict,
-      'epoch': epoch,
-      'reward': avg_reward,
-      'dice': avg_dice
-    }
-    torch.save(state, 'checkpoints/Policy_ckpt_E_%d_dice_%.3f_R_%.3f_model_%s'%(epoch, avg_dice, avg_reward, args.model[0:3]))
+    if epoch % 50 == 0:
+        agent_state_dict = agent.module.state_dict() if args.parallel else agent.state_dict()
+        state = {
+          'agent': agent_state_dict,
+          'epoch': epoch,
+          'reward': avg_reward,
+          'dice': avg_dice
+        }
+        torch.save(state, 'checkpoints/Policy_ckpt_E_%d_R_%.3f_%s'%(epoch, avg_reward, args.model[0:3]))
 
 #--------------------------------------------------------------------------------------------------------#
 trainset, testset = utils.get_dataset(args.model, args.data_dir)
-# train = trainset.__getitem__(0)
-# test = testset.__getitem__(0)
+
 # visualize_images(trainset.data, trainset.targets, "train sample")
 # visualize_images(testset.data, testset.targets, "test sample")
 trainloader = torchdata.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
 testloader = torchdata.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
 # 1. Load the Agent
-# agent = utils.get_model('Landsat8_ResNet')
 agent = utils.get_model('ResNet_Landsat8')
 print('PN loaded!')
 
@@ -324,11 +324,13 @@ print('U-Net weights loaded!')
 # Load the Policy Network (if checkpoint exists)
 if args.load is not None:
     checkpoint = torch.load(args.load)
-    agent.load_state_dict(checkpoint)
-    # agent.load_state_dict(checkpoint['agent'])
-    start_epoch = 101 #checkpoint['epoch'] + 1
+    # agent.load_state_dict(checkpoint)
+    agent.load_state_dict(checkpoint['agent'])
+    start_epoch = checkpoint['epoch'] + 1
     # print('loaded pretrained agent from', args.load)
     print("PN weights loaded!")
+else:
+    start_epoch = 1
 
 # Parallelize the models if multiple GPUs available - Important for Large Batch Size
 # if args.parallel:
@@ -341,7 +343,6 @@ if args.load is not None:
 optimizer = optim.Adam(agent.parameters(), lr=args.lr)
 
 exp_return = []
-start_epoch = 1
 
 # OTAN TO TREXEIS ME > 1 image sto batch EPANEFERE TO BATCHNORM
 for epoch in range(start_epoch, start_epoch+args.max_epochs):
