@@ -9,7 +9,7 @@ import shutil
 # from random import randint, sample
 from sklearn.model_selection import train_test_split
 from utils.custom_dataloader import CustomDatasetFromImages, LandsatDataset, LandsatSubset
-
+import matplotlib.pyplot as plt
 
 def save_args(__file__, args):
     shutil.copy(os.path.basename(__file__), args.cv_dir)
@@ -202,5 +202,17 @@ def get_model(model):
 
     return agent # rnet_hr, rnet_lr,
 
-# def keras2pytorch_model(keras_model, pytorch_model):
+def save_masked_img_grid(epoch, batch_idx ,inputs_sample, mode):
+    # patches_dropped = []
+    # for i in range(len(agent_actions)):
+    #     patches_dropped.append( str(16 - sum(agent_actions[i].int()).item()) )
+
+    # make the grid of 4 masked images
+    fig, axarr = plt.subplots(2, 2)
+
+    for ax, img in zip(axarr.ravel(), inputs_sample):
+        ax.imshow(img.permute(1, 2, 0).cpu())
+    fig.suptitle(mode)
+    fig.savefig("Experiment#3/action_progress/"+mode+"/Epoch" + str(epoch) +"_batch_"+ str(batch_idx+1) + ".jpg")
+    plt.close("all")
 

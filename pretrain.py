@@ -10,28 +10,24 @@ How to Run on Different Benchmarks:
        --lr_size 8, 56 (Depends on the dataset)
 """
 import os
-from tensorboard_logger import configure, log_value
 import torch
 # Autograd automatically supports Tensors with requires_grad set to True !!!
 import torch.utils.data as torchdata
-import numpy as np
 import matplotlib.pyplot as plt
 import tqdm
 import torch.optim as optim
 
-from torch.distributions import Multinomial, Bernoulli
+from torch.distributions import Bernoulli
 from utils import utils
-from Seg_models_pytorch import get_model_pytorch
+from SegNet.unet_models_pytorch import get_model_pytorch
 # from Seg_models import get_model_keras
-from visualize import visualize_with_seg_mask, visualize_images
 # from torchsummary import summary
 import torch.backends.cudnn as cudnn
 
+from SegNet.utils import get_SegNet_prediction
+
 cudnn.benchmark = True
 
-IMAGE_SIZE = (256, 256)
-N_CHANNELS = 3
-N_FILTERS = 16
 WEIGHTS_FILE ='cv/tmp/Landsat-8/unet/model_unet_voting_final_weights.h5'
 
 import argparse
@@ -40,9 +36,9 @@ parser.add_argument('--lr', type=float, default=1e-3, help='learning rate') # DE
 parser.add_argument('--model', default='ResNet_Landsat8', help='R<depth>_<dataset> see utils.py for a list of configurations')
 parser.add_argument('--ckpt_hr_cl', help='checkpoint directory for the high resolution classifier')
 parser.add_argument('--data_dir', default='data/', help='data directory')
-parser.add_argument('--load', default="checkpoints/Policy_ckpt_E_100_R_0.436_Res", help='checkpoint to load agent from')
+parser.add_argument('--load', default=None, help='checkpoint to load agent from')
 parser.add_argument('--cv_dir', default='cv/tmp/', help='checkpoint directory (models and logs are saved here)')
-parser.add_argument('--batch_size', type=int, default=16, help='batch size') # INCREASED batch size 8 --> 16
+parser.add_argument('--batch_size', type=int, default=32, help='batch size') # INCREASED batch size 8 --> 16
 parser.add_argument('--max_epochs', type=int, default=900, help='total epochs to run')
 parser.add_argument('--parallel', action ='store_true', default=False, help='use multiple GPUs for training')
 parser.add_argument('--penalty', type=float, default=-0.5, help='to penalize the PN for incorrect predictions')
@@ -55,32 +51,7 @@ if not os.path.exists(args.cv_dir):
     os.system('mkdir ' + args.cv_dir)
 utils.save_args(__file__, args)
 
-IMG_PATH = 'data/images'
-MSK_PATH = 'data/voting_masks'
 TH_FIRE = 0.25 # fire threshold
-
-def test_unet():
-    img_path = os.path.join('data/images', 'LC08_L1GT_142045_20200808_20200808_01_RT_p00533.tif')
-    from Seg_generator import get_img_762bands
-    img3c = torch.from_numpy(get_img_762bands(img_path)) # in 3 channels
-    # y_pred = keras_unet.predict(np.array([img3c]), batch_size=1)
-    img3c = torch.unsqueeze(img3c, 0).permute(0, 3, 1, 2)
-    y_pred = pytorch_unet.forward(img3c)
-    visualize_with_seg_mask(img3c[0], y_pred[0])
-    # sum(sum(y_pred[0][0]>0))
-
-def get_SegNet_prediction(images):
-    # keras_unet = get_model_keras(model_name='unet',
-    #                              input_height=IMAGE_SIZE[0], input_width=IMAGE_SIZE[1],
-    #                              n_filters=N_FILTERS, n_channels=N_CHANNELS)
-    # keras_unet.load_weights(WEIGHTS_FILE)
-    # images = images.permute(0, 2, 3, 1)
-    y_pred = pytorch_unet.forward(images.cpu()) #, batch_size=args.batch_size)
-
-    # y_pred = y_pred[:, :, :, 0] > TH_FIRE # edw ginontai binary oi times
-    y_pred = y_pred > TH_FIRE
-    pred_masks = np.array(y_pred * 255, dtype=np.uint8)
-    return pred_masks
 
 def dice_coefficient(predicted, target, smooth=1):
     """
@@ -117,19 +88,6 @@ def compute_SegNet_reward(preds, targets, policy):
 
     return reward.unsqueeze(1), dice
 
-def save_masked_img_grid(epoch, batch_idx ,inputs_sample, mode):
-    # patches_dropped = []
-    # for i in range(len(agent_actions)):
-    #     patches_dropped.append( str(16 - sum(agent_actions[i].int()).item()) )
-
-    # make the grid of 4 masked images
-    fig, axarr = plt.subplots(2, 2)
-
-    for ax, img in zip(axarr.ravel(), inputs_sample):
-        ax.imshow(img.permute(1, 2, 0).cpu())
-    fig.suptitle(mode)
-    fig.savefig("Experiment#3/action_progress/"+mode+"/Epoch" + str(epoch) +"_batch_"+ str(batch_idx+1) + ".jpg")
-    plt.close("all")
 
 def train(epoch):
 
@@ -178,8 +136,8 @@ def train(epoch):
 
         # Input (masked HR) images to the Segmentation Network
 
-        preds_baseline = get_SegNet_prediction(inputs_baseline)
-        preds_sample = get_SegNet_prediction(inputs_sample)
+        preds_baseline = get_SegNet_prediction(inputs_baseline, pytorch_unet)
+        preds_sample = get_SegNet_prediction(inputs_sample, pytorch_unet)
 
         # Compute reward for baseline and sampled policy
         preds_baseline = torch.from_numpy(preds_baseline)
@@ -208,7 +166,7 @@ def train(epoch):
         # Save the final states (one epoch, 16 images)
         # if epoch % 10 == 0:
             # dropped = str(16-sum(agent_actions[0].int()).item()) # at zero position is the only one image
-            # save_masked_img_grid(epoch, batch_idx, inputs_sample, "training")
+            # utils.save_masked_img_grid(epoch, batch_idx, inputs_sample, "training")
             # plt.imsave("action_progress/Epoch" + str(epoch) + "_patches_dropped_" + dropped + ".jpg",
             #            inputs_sample[0].permute(1, 2, 0).cpu().numpy())
 
@@ -256,7 +214,7 @@ def test(epoch):
 
         # Get the masked high-res image and perform inference
         inputs = utils.get_agent_masked_image(inputs, policy, mappings, patch_size)
-        preds = get_SegNet_prediction(inputs)
+        preds = get_SegNet_prediction(inputs, pytorch_unet)
 
         preds = torch.from_numpy(preds)
         reward, dice = compute_SegNet_reward(preds, targets, policy.data)
@@ -265,7 +223,7 @@ def test(epoch):
         policies.append(policy.data)
         dice_coef.append(dice)
 
-        # save_masked_img_grid(epoch, batch_idx, inputs, "validation")
+        # utils.save_masked_img_grid(epoch, batch_idx, inputs, "validation")
 
     avg_reward, avg_dice, sparsity, variance = utils.performance_stats(policies, rewards, dice_coef)
     torch.cuda.empty_cache()
@@ -308,7 +266,7 @@ mappings, _, patch_size = utils.action_space_model('Landsat8')
 
 # 2. Load the segmentation network (Unet-Light-3c) --> den einai to light 3c (malakes)
 
-pytorch_unet = get_model_pytorch(model_name='unet', n_filters=N_FILTERS, n_channels=N_CHANNELS)
+pytorch_unet = get_model_pytorch(model_name='unet', n_filters=16, n_channels=3)
 # summary(pytorch_unet, (3, 256, 256))
 
 print('U-Net loaded!')
@@ -357,7 +315,6 @@ print(f'Expected Return: {sum(exp_return)/len(exp_return)}')
 plt.figure()
 plt.semilogy(exp_return)
 plt.xlabel('Epochs')
-# plt.ylabel('Expected return')
 plt.title('Expected return')
 plt.grid(linestyle=':', which='both')
 plt.show()

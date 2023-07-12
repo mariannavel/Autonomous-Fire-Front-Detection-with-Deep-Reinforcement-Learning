@@ -4,12 +4,7 @@ models/__pycache__/
 utils/__pycache__/
 __pycache__/
 .idea/
-patchdrop_seg_train_results
 pytorch_unet.pt
 later...
-notes
 action_progress
 checkpoints
-Experiment#2 (100 images)
-Experiment#1 (20 images)
-Experiment#0 (one image)

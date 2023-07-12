@@ -4,8 +4,6 @@ from utils import utils
 import matplotlib.pyplot as plt
 import numpy as np
 
-from Seg_generator import *
-
 IMG_PATH = 'data/images/'
 MSK_PATH = 'data/voting_masks'
 
@@ -24,8 +22,8 @@ def visualize_images(images, masks, title=''):
         plt.suptitle(title)
         plt.axis('off')
         plt.tight_layout()
-        # plt.show()
-        plt.savefig(f"myplot{i}")
+        plt.show()
+        # plt.savefig(f"myplot{i}")
 
 def plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR, I_HR_patch, M_HR_patch):
     """
@@ -119,6 +117,7 @@ def visualize_masked_imgs(model):
             break
 
 def visualize_image3c_with_mask():
+    # TA KOKKINA EINAI STIN PRETRAIN
     img_filelist = sorted(os.listdir(IMG_PATH))
     msk_filelist = sorted(os.listdir(MSK_PATH))
     for fn_img, fn_mask in zip(img_filelist, msk_filelist):
@@ -136,22 +135,6 @@ def visualize_image3c_with_mask():
         plt.title('Voting mask (target)')
 
         plt.show()
-
-def visualize_with_seg_mask(img3c, mask):
-    # permute for visualization purposes
-    img3c = img3c.float().permute(2, 1, 0)
-    mask = mask.float().permute(2, 1, 0)
-    # mask = torch.unsqueeze(mask[0] > 0, dim=0) # make it binary
-    mask = mask > TH_FIRE
-    plt.subplot(1, 2, 1)
-    plt.imshow(img3c.detach().numpy())
-    plt.title('Original image 3c')
-
-    plt.subplot(1, 2, 2)
-    plt.imshow(mask.detach().numpy())
-    plt.title('Voting mask (target)')
-
-    plt.show()
 
 def baseline_vs_agent_sampling(orig, env1, env2):
     env1 = env1.float().permute(2, 1, 0)
