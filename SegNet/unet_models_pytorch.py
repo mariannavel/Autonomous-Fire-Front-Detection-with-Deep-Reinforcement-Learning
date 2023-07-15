@@ -51,8 +51,20 @@ class Conv2DBlock(nn.Module):
     def forward(self, x):
         return self.conv_block(x)
 
+def center_crop(x, target_size):
+    """ ConvTranspose2d outputs one additional dim """
+    _, _, h, w = target_size
+    _, _, th, tw = x.size()
+    dh = (th - h) // 2
+    dw = (tw - w)
+    cropped = x[:, :, dh: dh + h, dw: dw + w]
+    return cropped
+
 class UNet(nn.Module):
-    def __init__(self, n_classes, in_channels=3, n_filters=16, dropout=0.1, batchnorm=True):
+    """
+    number of input filters and channels determine the version (10, 3c or light-3c)
+    """
+    def __init__(self, n_classes, in_channels=10, n_filters=16, dropout=0.1, batchnorm=True):
         super(UNet, self).__init__()
         # contracting path
         self.down1 = Conv2DBlock(in_channels, n_filters, batchnorm=batchnorm, dropout=dropout)
@@ -81,30 +93,47 @@ class UNet(nn.Module):
         # Center
         c = self.center(nn.MaxPool2d(2)(d4))
         # Upsample
-        u4 = self.up4(torch.cat([self.center_crop(self.trans4(c), d4.size()), d4], dim=1))
-        u3 = self.up3(torch.cat([self.center_crop(self.trans3(u4), d3.size()), d3], dim=1))
-        u2 = self.up2(torch.cat([self.center_crop(self.trans2(u3), d2.size()), d2], dim=1))
-        u1 = self.up1(torch.cat([self.center_crop(self.trans1(u2), d1.size()), d1], dim=1))
+        u4 = self.up4(torch.cat([center_crop(self.trans4(c), d4.size()), d4], dim=1))
+        u3 = self.up3(torch.cat([center_crop(self.trans3(u4), d3.size()), d3], dim=1))
+        u2 = self.up2(torch.cat([center_crop(self.trans2(u3), d2.size()), d2], dim=1))
+        u1 = self.up1(torch.cat([center_crop(self.trans1(u2), d1.size()), d1], dim=1))
         # Final convolution
         output = self.final_conv(u1)
         return output
 
-    def center_crop(self, x, target_size):
-        """ ConvTranspose2d outputs one additional dim """
-        _, _, h, w = target_size
-        _, _, th, tw = x.size()
-        dh = (th - h) // 2
-        dw = (tw - w)
-        cropped = x[:, :, dh: dh + h, dw: dw + w]
-        return cropped
+class UNetSmall(nn.Module):
+    def __init__(self, n_classes, in_channels=3, n_filters=16, dropout=0.1, batchnorm=True):
+        super(UNetSmall, self).__init__()
 
-def get_unet(nClasses, n_filters=16, dropout=0.1, batchnorm=True, n_channels=3):
-    model = UNet(nClasses, n_channels, n_filters, dropout, batchnorm)
-    return model
+        # contracting path
+        self.down1 = Conv2DBlock(in_channels, n_filters, batchnorm=batchnorm, dropout=dropout)
+        self.down2 = Conv2DBlock(n_filters, n_filters, batchnorm=batchnorm, dropout=dropout)
 
-def get_model_pytorch(model_name, nClasses=1, n_filters=16, dropout=0.1, batchnorm=True, n_channels=10):
+        self.center = Conv2DBlock(n_filters, n_filters * 2, batchnorm=batchnorm, dropout=dropout)
+
+        # expansive path
+        self.trans2 = nn.ConvTranspose2d(n_filters * 2, n_filters * 2, kernel_size=3, stride=2, padding=0)
+        self.up2 = Conv2DBlock(n_filters * 2 + n_filters * 2, n_filters * 1, batchnorm=batchnorm, dropout=dropout)
+        self.trans1 = nn.ConvTranspose2d(n_filters, n_filters, kernel_size=3, stride=2, padding=0)
+        self.up1 = Conv2DBlock(n_filters + n_filters, n_filters, batchnorm=batchnorm, dropout=dropout)
+
+        self.final_conv = nn.Conv2d(n_filters, n_classes, kernel_size=1)
+
+    def forward(self, x):
+        # Downsample
+        d1 = self.down1(x)
+        d2 = self.down2(nn.MaxPool2d(2)(d1))
+        c = self.center(nn.MaxPool2d(2)(d2))
+        # Upsample
+        u2 = self.up2(torch.cat([center_crop(self.trans2(c), d2.size()), d2], dim=1))
+        u1 = self.up1(torch.cat([center_crop(self.trans1(u2), d1.size()), d1], dim=1))
+        # Final convolution
+        output = self.final_conv(u1)
+        return output
+
+def get_model_pytorch(model_name, nClasses=1, n_filters=16, dropout=0.1, batchnorm=True, n_channels=3):
     if model_name == 'fcn':
         model = FCN(nClasses, n_filters, dropout, batchnorm)
     elif model_name == 'unet':
-        model = get_unet(nClasses, n_filters, dropout, batchnorm, n_channels)
+        model = UNet(nClasses, n_channels, n_filters, dropout, batchnorm)
     return model

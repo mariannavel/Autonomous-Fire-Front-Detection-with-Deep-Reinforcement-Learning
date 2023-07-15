@@ -30,18 +30,6 @@ def get_img_762bands(path):
     img = np.float32(img) / MAX_PIXEL_VALUE
     return img
 
-def get_SegNet_prediction(images, unet):
-    # keras_unet = get_model_keras(model_name='unet',
-    #                              input_height=IMAGE_SIZE[0], input_width=IMAGE_SIZE[1],
-    #                              n_filters=N_FILTERS, n_channels=N_CHANNELS)
-    # keras_unet.load_weights(WEIGHTS_FILE)
-    # images = images.permute(0, 2, 3, 1)
-    y_pred = unet.forward(images.cpu()) #, batch_size=args.batch_size)
-
-    # y_pred = y_pred[:, :, :, 0] > TH_FIRE # edw ginontai binary oi times
-    y_pred = y_pred > TH_FIRE
-    pred_masks = np.array(y_pred * 255, dtype=np.uint8)
-    return pred_masks
 def visualize_dataset3c(path='data/images'):
     # iterate over files in that path
     for i, filename in enumerate(os.listdir(path)):

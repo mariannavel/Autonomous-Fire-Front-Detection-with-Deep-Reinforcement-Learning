@@ -47,7 +47,6 @@ def conv2d_block(input_tensor, n_filters, kernel_size = 3, batchnorm = True):
     x = Activation("relu")(x)
     return x
 
-""" Afto einai to unet 3c """
 def get_unet(nClasses, input_height=256, input_width=256, n_filters = 16, dropout = 0.1, batchnorm = True, n_channels=10):
     input_img = Input(shape=(input_height,input_width, n_channels))
 
@@ -96,7 +95,6 @@ def get_unet(nClasses, input_height=256, input_width=256, n_filters = 16, dropou
     return model
     
 
-""" AFTO EINAI TO LIGHT 3c - I guess """
 def get_unet_small1 (nClasses, input_height=128, input_width=128, n_filters = 16, dropout = 0.1, batchnorm = True, n_channels=3):
 
     input_img = Input(shape=(input_height,input_width, n_channels))
@@ -127,8 +125,6 @@ def get_unet_small1 (nClasses, input_height=128, input_width=128, n_filters = 16
     model = Model(inputs=[input_img], outputs=[outputs])
     return model
 
-	
-
 
 def get_unet_small2 (nClasses, input_height=128, input_width=128, n_filters = 16, dropout = 0.1, batchnorm = True, n_channels=3):
    
@@ -154,7 +150,7 @@ def get_unet_small2 (nClasses, input_height=128, input_width=128, n_filters = 16
 def get_model_keras(model_name, nClasses=1, input_height=128, input_width=128, n_filters = 16, dropout = 0.1, batchnorm = True, n_channels=10):
     if model_name == 'fcn':
         model = FCN
-    elif model_name == 'unet':
+    elif model_name == 'unet': # 10, 3c and light-3c have same architecture, num of filters varies
         model = get_unet
     elif model_name == 'unet_small':
         model = get_unet_small1

@@ -20,38 +20,37 @@ import torch.optim as optim
 from torch.distributions import Bernoulli
 from utils import utils
 from SegNet.unet_models_pytorch import get_model_pytorch
-# from Seg_models import get_model_keras
 # from torchsummary import summary
+from tensorboard_logger import configure
 import torch.backends.cudnn as cudnn
-
-from SegNet.utils import get_SegNet_prediction
+import time
+from visualize import visualize_images
 
 cudnn.benchmark = True
 
 WEIGHTS_FILE ='cv/tmp/Landsat-8/unet/model_unet_voting_final_weights.h5'
 
 import argparse
-parser = argparse.ArgumentParser(description='Policy Network Finetuning-I')
+parser = argparse.ArgumentParser(description='Policy Network Training')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate') # DECREASED lr 0.01 --> 0.001
 parser.add_argument('--model', default='ResNet_Landsat8', help='R<depth>_<dataset> see utils.py for a list of configurations')
 parser.add_argument('--ckpt_hr_cl', help='checkpoint directory for the high resolution classifier')
 parser.add_argument('--data_dir', default='data/', help='data directory')
 parser.add_argument('--load', default=None, help='checkpoint to load agent from')
 parser.add_argument('--cv_dir', default='cv/tmp/', help='checkpoint directory (models and logs are saved here)')
-parser.add_argument('--batch_size', type=int, default=32, help='batch size') # INCREASED batch size 8 --> 16
-parser.add_argument('--max_epochs', type=int, default=900, help='total epochs to run')
+parser.add_argument('--batch_size', type=int, default=32, help='batch size') # INCREASED batch size 8 --> 16 --> 32
+parser.add_argument('--max_epochs', type=int, default=1000, help='total epochs to run')
 parser.add_argument('--parallel', action ='store_true', default=False, help='use multiple GPUs for training')
 parser.add_argument('--penalty', type=float, default=-0.5, help='to penalize the PN for incorrect predictions')
 parser.add_argument('--alpha', type=float, default=0.8, help='probability bounding factor')
 parser.add_argument('--lr_size', type=int, default=32, help='Policy Network Image Size')
-parser.add_argument('--test_interval', type=int, default=10, help='At what epoch to test the model')
+parser.add_argument('--test_interval', type=int, default=10, help='Every how many epoch to test the model')
+parser.add_argument('--ckpt_interval', type=int, default=100, help='Every how many epoch to save the model')
 args = parser.parse_args()
 
 if not os.path.exists(args.cv_dir):
     os.system('mkdir ' + args.cv_dir)
 utils.save_args(__file__, args)
-
-TH_FIRE = 0.25 # fire threshold
 
 def dice_coefficient(predicted, target, smooth=1):
     """
@@ -73,7 +72,6 @@ def compute_SegNet_reward(preds, targets, policy):
     :param targets: the ground truth segmentation masks
     :param policy: binary vector indicating sampled or non-sampled patches
     """
-    preds[preds==255] = 1
 
     patch_use = policy.sum(1).float() / policy.size(1) # I will penalize the policy with the number of sampled patches
     sparse_reward = 1.0 - patch_use**2
@@ -84,35 +82,44 @@ def compute_SegNet_reward(preds, targets, policy):
 
     penalty = 1-dice # the segmentation error between 0 and 1
 
-    reward = sparse_reward - penalty
+    reward = sparse_reward - penalty.to(device)
 
     return reward.unsqueeze(1), dice
 
+def get_SegNet_prediction(images, unet):
+    TH_FIRE = 0.25
+    # keras_unet = get_model_keras(model_name='unet',
+    #                              input_height=IMAGE_SIZE[0], input_width=IMAGE_SIZE[1],
+    #                              n_filters=N_FILTERS, n_channels=N_CHANNELS)
+    # keras_unet.load_weights(WEIGHTS_FILE)
+    y_pred = unet.forward(images) #, batch_size=args.batch_size)
+    # y_pred = y_pred[:, :, :, 0] > TH_FIRE # edw ginontai binary oi times
+    y_pred = y_pred > TH_FIRE
+    # pred_masks = np.array(y_pred * 255, dtype=np.uint8)
+    return (y_pred*1).to(device)
 
 def train(epoch):
 
-    agent.train() # trains the policy network only
+    agent.train()  # trains the policy network only
 
     rewards, rewards_baseline, policies, dice_coefs = [], [], [], []
 
-    for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(trainloader), total=len(trainloader), disable=True): # , disable=True
+    for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(trainloader), total=len(trainloader), disable=True):
 
         inputs = inputs.float().permute(0, 3, 1, 2)
         targets = targets.float().permute(0, 3, 1, 2)
         # if args.parallel:
-        # inputs = inputs.cuda()
-        # targets = targets.cuda()
+        inputs = inputs.to(device)
+        targets = targets.to(device)
 
         inputs_agent = inputs.clone()
         inputs_baseline = inputs.clone()
         inputs_sample = inputs.clone()
 
-        # Run the low-res image through Policy Network
         inputs_agent = torch.nn.functional.interpolate(inputs_agent, (args.lr_size, args.lr_size))
 
-        # outputs_agent = agent.forward(inputs_agent, 'R_Landsat8', 'lr')
+        # Run the LR image through the Policy Network
         probs = agent.forward(inputs_agent)
-        # probs = torch.sigmoid(outputs_agent)
         probs = args.alpha * probs + (1-args.alpha) * (1-probs) # temperature scaling (to encourage exploration)
 
         # --Got one prob vector for each image of the batch--
@@ -136,12 +143,10 @@ def train(epoch):
 
         # Input (masked HR) images to the Segmentation Network
 
-        preds_baseline = get_SegNet_prediction(inputs_baseline, pytorch_unet)
-        preds_sample = get_SegNet_prediction(inputs_sample, pytorch_unet)
+        preds_baseline = get_SegNet_prediction(inputs_baseline.cpu(), pytorch_unet)
+        preds_sample = get_SegNet_prediction(inputs_sample.cpu(), pytorch_unet)
 
         # Compute reward for baseline and sampled policy
-        preds_baseline = torch.from_numpy(preds_baseline)
-        preds_sample = torch.from_numpy(preds_sample)
         reward_baseline, dice_baseline = compute_SegNet_reward(preds_baseline, targets, baseline_actions.data)
         reward_sample, dice = compute_SegNet_reward(preds_sample, targets, agent_actions.data)
         # advantage = reward_sample.cuda().float() - reward_baseline.cuda().float()
@@ -162,31 +167,27 @@ def train(epoch):
         rewards_baseline.append(reward_baseline.cpu())
         policies.append(agent_actions.data.cpu())
         dice_coefs.append(dice.cpu())
+        torch.cuda.empty_cache()
 
         # Save the final states (one epoch, 16 images)
         # if epoch % 10 == 0:
             # dropped = str(16-sum(agent_actions[0].int()).item()) # at zero position is the only one image
-            # utils.save_masked_img_grid(epoch, batch_idx, inputs_sample, "training")
             # plt.imsave("action_progress/Epoch" + str(epoch) + "_patches_dropped_" + dropped + ".jpg",
             #            inputs_sample[0].permute(1, 2, 0).cpu().numpy())
 
-    avg_reward, avg_dice, sparsity, variance = utils.performance_stats(policies, rewards, dice_coefs)
-    # to sparsity einai posa patches kata meso oro epilegei
-    exp_return.append(avg_reward)
-    # torch.cuda.empty_cache()
-    print('Train: %d | Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f'%(epoch, avg_reward, avg_dice, sparsity, variance))
+    E = {}  # stores the Expected Value of each statistic
+    E["return"], E["dice"], E["sparsity"], E["variance"] = utils.performance_stats(policies, rewards, dice_coefs)
+    E["rewards_baseline"] = rewards_baseline
+    exp_return.append(E["return"])
+    t = time.time()-start_time
+    print('Train: %d | Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f | %.3f s'%(epoch, E["return"], E["dice"], E["sparsity"], E["variance"], t))
 
-    # add function print stats ... log values
-    # log_value('train_accuracy', accuracy, epoch)
-    # log_value('train_reward', reward, epoch)
-    # log_value('train_sparsity', sparsity, epoch)
-    # log_value('train_variance', variance, epoch)
-    # log_value('train_baseline_reward', torch.cat(rewards_baseline, 0).mean(), epoch)
-    # log_value('train_unique_policies', len(policy_set), epoch)
+    utils.save_logs(epoch, E, mode="train")
+
 
 def test(epoch):
 
-    # agent.eval() # flag: deactivate training (gradient update) mode
+    agent.eval() # flag: deactivate training (gradient update) mode
 
     rewards, policies, dice_coef = [], [], []
     for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(testloader), total=len(testloader)):
@@ -196,55 +197,52 @@ def test(epoch):
             targets = targets.float().permute(0, 3, 1, 2)
             # targets = torch.Tensor([int(val) for val in targets])
 
-        if args.parallel:
-            inputs = inputs.cuda()
-            targets = targets.cuda()
+            # if args.parallel:
+            inputs.to(device)
+            targets.to(device)
 
-        # Get the low resolution agent images
-        inputs_agent = inputs.clone()
-        inputs_agent = torch.nn.functional.interpolate(inputs_agent, (args.lr_size, args.lr_size))
-        # probs = torch.sigmoid(agent.forward(inputs_agent, 'R_Landsat8', 'lr'))
-        with torch.no_grad():
-            probs = agent.forward(inputs_agent)
+            # Get the low resolution agent images
+            inputs_agent = inputs.clone()
+            inputs_agent = torch.nn.functional.interpolate(inputs_agent, (args.lr_size, args.lr_size))
+            # probs = torch.sigmoid(agent.forward(inputs_agent, 'R_Landsat8', 'lr'))
 
-        # Sample the test-time policy
-        policy = probs.data.clone()
-        policy[policy<0.5] = 0.0
-        policy[policy>=0.5] = 1.0
+            probs = agent.forward(inputs_agent.to(device))
 
-        # Get the masked high-res image and perform inference
-        inputs = utils.get_agent_masked_image(inputs, policy, mappings, patch_size)
-        preds = get_SegNet_prediction(inputs, pytorch_unet)
+            # Sample the test-time policy
+            policy = probs.data.clone()
+            policy[policy<0.5] = 0.0
+            policy[policy>=0.5] = 1.0
 
-        preds = torch.from_numpy(preds)
-        reward, dice = compute_SegNet_reward(preds, targets, policy.data)
+            # Get the masked high-res image and perform inference
+            inputs = utils.get_agent_masked_image(inputs, policy, mappings, patch_size)
+            preds = get_SegNet_prediction(inputs.cpu(), pytorch_unet)
+
+        # preds = torch.from_numpy(preds)
+        reward, dice = compute_SegNet_reward(preds.cpu(), targets, policy.data)
 
         rewards.append(reward)
         policies.append(policy.data)
         dice_coef.append(dice)
+        torch.cuda.empty_cache()
 
         # utils.save_masked_img_grid(epoch, batch_idx, inputs, "validation")
+    E = {} # stores the Expected Value of each statistic
+    E["return"], E["dice"], E["sparsity"], E["variance"] = utils.performance_stats(policies, rewards, dice_coef)
 
-    avg_reward, avg_dice, sparsity, variance = utils.performance_stats(policies, rewards, dice_coef)
-    torch.cuda.empty_cache()
+    print('Test - Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f\n'%(E["return"], E["dice"], E["sparsity"], E["variance"]))
 
-    print('Test - Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f\n'%(avg_reward, avg_dice, sparsity, variance))
-    # log_value('test_accuracy', accuracy, epoch)
-    # log_value('test_reward', reward, epoch)
-    # log_value('test_sparsity', sparsity, epoch)
-    # log_value('test_variance', variance, epoch)
-    # log_value('test_unique_policies', len(policy_set), epoch)
+    utils.save_logs(epoch, E, mode="test")
 
-    # Save the Policy Network - Classifier is fixed in this phase
-    if epoch % 50 == 0:
+    if epoch % args.ckpt_interval == 0:
+        # save the agent model
         agent_state_dict = agent.module.state_dict() if args.parallel else agent.state_dict()
         state = {
           'agent': agent_state_dict,
           'epoch': epoch,
-          'reward': avg_reward,
-          'dice': avg_dice
+          'reward': E["return"],
+          'dice': E["dice"]
         }
-        torch.save(state, 'checkpoints/Policy_ckpt_E_%d_R_%.3f_%s'%(epoch, avg_reward, args.model[0:3]))
+        torch.save(state, 'checkpoints/Policy_ckpt_E_%d_R_%.3f_%s'%(epoch, E["return"], args.model[0:3]))
 
 #--------------------------------------------------------------------------------------------------------#
 trainset, testset = utils.get_dataset(args.model, args.data_dir)
@@ -252,55 +250,51 @@ trainset, testset = utils.get_dataset(args.model, args.data_dir)
 # visualize_images(trainset.data, trainset.targets, "train sample")
 # visualize_images(testset.data, testset.targets, "test sample")
 trainloader = torchdata.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-testloader = torchdata.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+testloader = torchdata.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0) # NUM WORKERS !!!!
+
+# device = "cuda" if torch.cuda.is_available() else "cpu"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # 1. Load the Agent
 agent = utils.get_model('ResNet_Landsat8')
-print('PN loaded!')
+agent.to(device)
+# next(agent.parameters()).is_cuda
 
-# Save the args to the checkpoint directory
-# configure(args.cv_dir+'/log', flush_secs=5)
+# Save the log values to the checkpoint directory
+configure(args.cv_dir+'/logs', flush_secs=5)
 
 # Agent Action Space
 mappings, _, patch_size = utils.action_space_model('Landsat8')
 
-# 2. Load the segmentation network (Unet-Light-3c) --> den einai to light 3c (malakes)
+# 2. Load the segmentation network (Unet-3c)
 
 pytorch_unet = get_model_pytorch(model_name='unet', n_filters=16, n_channels=3)
 # summary(pytorch_unet, (3, 256, 256))
-
-print('U-Net loaded!')
+print('U-Net loaded')
 
 # 3. Load the weights (trained on voting scheme)
-# keras_unet.load_weights(WEIGHTS_FILE)
 pytorch_unet.load_state_dict(torch.load('cv/tmp/Landsat-8/unet/pytorch_unet.pt'))
-pytorch_unet.eval()
-print('U-Net weights loaded!')
+pytorch_unet.eval() # UNet must be on cpu, else CUDA out of memory
+print('U-Net weights loaded')
+# print(" PyTorch:", pytorch_unet.down1.conv_block[0].weight.shape)
 
-# print("Keras:", keras_unet.weights[0].shape, " PyTorch:", pytorch_unet.down1.conv_block[0].weight.shape)
-
+start_epoch = 1
 # Load the Policy Network (if checkpoint exists)
 if args.load is not None:
     checkpoint = torch.load(args.load)
-    # agent.load_state_dict(checkpoint)
     agent.load_state_dict(checkpoint['agent'])
     start_epoch = checkpoint['epoch'] + 1
-    # print('loaded pretrained agent from', args.load)
-    print("PN weights loaded!")
-else:
-    start_epoch = 1
+    print("Pretrained agent loaded")
 
 # Parallelize the models if multiple GPUs available - Important for Large Batch Size
 # if args.parallel:
 #     agent = nn.DataParallel(agent)
 #     unet = nn.DataParallel(unet)
 
-# unet.eval().cuda()
-# agent.cuda() # Only agent is trained
-
 optimizer = optim.Adam(agent.parameters(), lr=args.lr)
 
 exp_return = []
+start_time = time.time()
 
 # OTAN TO TREXEIS ME > 1 image sto batch EPANEFERE TO BATCHNORM
 for epoch in range(start_epoch, start_epoch+args.max_epochs):
@@ -309,7 +303,7 @@ for epoch in range(start_epoch, start_epoch+args.max_epochs):
         test(epoch)
 
 print(f'Expected Return: {sum(exp_return)/len(exp_return)}')
-
+print(f'Runtime (sec): {time.time()-start_time}')
 # torch.save(agent.state_dict(), f"checkpoints/Policy_ResNet_{len(trainset)}_train_images_{args.max_epochs+start_epoch-1}_epochs.pt")
 
 plt.figure()

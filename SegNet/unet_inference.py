@@ -1,4 +1,4 @@
-from SegNet.unet_models_keras import get_model_keras
+from unet_models_keras import get_model_keras
 from utils import *
 import torch
 
@@ -25,6 +25,7 @@ def generate_inference(img_path='data/images', msk_path='data/voting_masks'):
     # 2. Load the weights (trained on the voting scheme)
     model.load_weights(WEIGHTS_FILE)
     print('Weights Loaded!')
+    # print("Keras:", model.weights[0].shape)
 
     img_filelist = sorted(os.listdir(img_path))
     msk_filelist = sorted(os.listdir(msk_path))

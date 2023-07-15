@@ -4,6 +4,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 import torchvision.datasets as torchdata
 import torchvision.models as torchmodels
+from tensorboard_logger import log_value
 import numpy as np
 import shutil
 # from random import randint, sample
@@ -50,7 +51,7 @@ def compute_reward(preds, targets, policy, penalty):
 
     return reward, match.float()
 
-def get_transforms(rnet, dset):
+def get_transforms(dset):
 
     if dset=='C10' or dset=='C100':
         mean = [x/255.0 for x in [125.3, 123.0, 113.9]]
@@ -142,25 +143,24 @@ def action_space_model(dset):
 def get_dataset(model, root='data/'):
 
     rnet, dset = model.split('_')
-    transform_train, transform_test = get_transforms(rnet, dset) # edw mporw na kanw resize tis eikones
+    # transform_train, transform_test = get_transforms(dset) # edw mporw na kanw resize tis eikones
 
     if dset=='Landsat8':
         trainset = LandsatDataset(root + 'train85.pkl')
         testset = LandsatDataset(root + 'test15.pkl')
-    elif dset=='C10':
-        trainset = torchdata.CIFAR10(root=root, train=True, download=True, transform=transform_train)
-        testset = torchdata.CIFAR10(root=root, train=False, download=True, transform=transform_test)
-    elif dset=='C100':
-        trainset = torchdata.CIFAR100(root=root, train=True, download=True, transform=transform_train)
-        testset = torchdata.CIFAR100(root=root, train=False, download=True, transform=transform_test)
-    elif dset=='ImgNet':
-        trainset = torchdata.ImageFolder(root+'/ImageNet/train/', transform_train)
-        testset = torchdata.ImageFolder(root+'/ImageNet/test/', transform_test)
-    elif dset=='fMoW':
-        trainset = CustomDatasetFromImages(root+'/fMoW/train.csv', transform_train)
-        testset = CustomDatasetFromImages(root+'/fMoW/test.csv', transform_test)
-    
-    # print(type(trainset))
+    # elif dset=='C10':
+    #     trainset = torchdata.CIFAR10(root=root, train=True, download=True, transform=transform_train)
+    #     testset = torchdata.CIFAR10(root=root, train=False, download=True, transform=transform_test)
+    # elif dset=='C100':
+    #     trainset = torchdata.CIFAR100(root=root, train=True, download=True, transform=transform_train)
+    #     testset = torchdata.CIFAR100(root=root, train=False, download=True, transform=transform_test)
+    # elif dset=='ImgNet':
+    #     trainset = torchdata.ImageFolder(root+'/ImageNet/train/', transform_train)
+    #     testset = torchdata.ImageFolder(root+'/ImageNet/test/', transform_test)
+    # elif dset=='fMoW':
+    #     trainset = CustomDatasetFromImages(root+'/fMoW/train.csv', transform_train)
+    #     testset = CustomDatasetFromImages(root+'/fMoW/test.csv', transform_test)
+
     return trainset, testset
 
 def get_model(model):
@@ -213,6 +213,18 @@ def save_masked_img_grid(epoch, batch_idx ,inputs_sample, mode):
     for ax, img in zip(axarr.ravel(), inputs_sample):
         ax.imshow(img.permute(1, 2, 0).cpu())
     fig.suptitle(mode)
-    fig.savefig("Experiment#3/action_progress/"+mode+"/Epoch" + str(epoch) +"_batch_"+ str(batch_idx+1) + ".jpg")
+    fig.savefig("action_progress/"+mode+"/Epoch" + str(epoch) +"_batch_"+ str(batch_idx+1) + ".jpg")
     plt.close("all")
 
+def save_logs(epoch, stats, mode="test"):
+    """
+    :param stats: dictionary of statistics to save
+    :param mode: train or test
+    """
+    log_value(f'{mode}_dice', stats["dice"], epoch)
+    log_value(f'{mode}_reward', stats["return"], epoch)
+    if mode == "train":
+        log_value('train_baseline_reward', torch.cat(stats["rewards_baseline"], 0).mean(), epoch)
+    log_value(f'{mode}_sparsity', stats["sparsity"], epoch)
+    log_value(f'{mode}_variance', stats["variance"], epoch)
+    # log_value(f'{mode}_unique_policies', len(stats["policy_set"]), epoch)
