@@ -8,7 +8,6 @@ from tensorboard_logger import log_value
 import numpy as np
 import shutil
 # from random import randint, sample
-from sklearn.model_selection import train_test_split
 from utils.custom_dataloader import CustomDatasetFromImages, LandsatDataset, LandsatSubset
 import matplotlib.pyplot as plt
 
@@ -17,24 +16,29 @@ def save_args(__file__, args):
     with open(args.cv_dir+'/args.txt','w') as f:
         f.write(str(args))
 
-def performance_stats(policies, rewards, dice_coef):
+def preprocess_inputs(LR_size, inputs, targets):
+    inputs = inputs.float().permute(0, 3, 1, 2)
+    targets = targets.float().permute(0, 3, 1, 2)
+    LR_inputs_agent = torch.nn.functional.interpolate(inputs.clone(), (LR_size, LR_size))
+    return inputs, LR_inputs_agent, targets
+
+def performance_stats(actions, rewards, dice_coef):
     # Print the performace metrics including the average reward, average number
-    # and variance of sampled num_patches, and number of unique policies
-    policies = torch.cat(policies, 0)
+    # and variance of sampled num_patches, and number of unique actions
+    actions = torch.cat(actions, 0)
     rewards = torch.cat(rewards, 0)
     dice_coefs = torch.cat(dice_coef, 0)
-    # accuracy = torch.cat(matches, 0).mean()
 
     reward = rewards.mean()
     dice_coef = dice_coefs.mean()
 
-    avg_selected_patches = policies.sum(1).mean()
-    variance = policies.sum(1).std()
-    # posa einai ta policies ??
-    policy_set = [p.cpu().numpy().astype(np.int).astype(np.str) for p in policies]
-    policy_set = set([''.join(p) for p in policy_set])
+    sparsity = actions.sum(1).mean() # average selected patches
+    variance = actions.sum(1).std()
 
-    return reward, dice_coef, avg_selected_patches, variance
+    # action_set = [p.cpu().numpy().astype(np.int).astype(np.str) for p in actions]
+    # action_set = set([''.join(p) for p in action_set])
+
+    return reward, dice_coef, sparsity, variance
 
 def compute_reward(preds, targets, policy, penalty):
     # Reward function favors policies that drops patches only if the classifier
@@ -143,11 +147,11 @@ def action_space_model(dset):
 def get_dataset(model, root='data/'):
 
     rnet, dset = model.split('_')
-    # transform_train, transform_test = get_transforms(dset) # edw mporw na kanw resize tis eikones
+    transform_train, transform_test = get_transforms(dset) # edw mporw na kanw resize tis eikones
 
     if dset=='Landsat8':
-        trainset = LandsatDataset(root + 'train85.pkl')
-        testset = LandsatDataset(root + 'test15.pkl')
+        trainset = LandsatDataset(root + 'train85.pkl', transform_train)
+        testset = LandsatDataset(root + 'test15.pkl', transform_test)
     # elif dset=='C10':
     #     trainset = torchdata.CIFAR10(root=root, train=True, download=True, transform=transform_train)
     #     testset = torchdata.CIFAR10(root=root, train=False, download=True, transform=transform_test)
