@@ -150,8 +150,8 @@ def get_dataset(model, root='data/'):
     transform_train, transform_test = get_transforms(dset) # edw mporw na kanw resize tis eikones
 
     if dset=='Landsat8':
-        trainset = LandsatDataset(root + 'train85.pkl', transform_train)
-        testset = LandsatDataset(root + 'test15.pkl', transform_test)
+        trainset = LandsatDataset(root + 'train1700.pkl')
+        testset = LandsatDataset(root + 'test301.pkl')
     # elif dset=='C10':
     #     trainset = torchdata.CIFAR10(root=root, train=True, download=True, transform=transform_train)
     #     testset = torchdata.CIFAR10(root=root, train=False, download=True, transform=transform_test)
@@ -178,6 +178,9 @@ def get_model(model):
         # rnet_hr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 2)
         # rnet_lr = resnet_in.ResNet(resnet_in.BasicBlock, [3,4,6,3], 2)
         agent = resnet_in.ResNet(resnet_in.BasicBlock, [1, 1, 1, 1], 16)  # block, layers, num_classes
+
+    elif model == 'ResNet18_Landsat8':
+        agent = resnet_in.resnet18(num_classes=16)
 
     elif model=='R32_C10':
         # [3,4,6,3] -> 3 blocks sto 1o layer, 4 blocks sto 2o, k.o.k

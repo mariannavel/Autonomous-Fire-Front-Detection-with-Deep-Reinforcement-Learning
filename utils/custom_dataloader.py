@@ -53,8 +53,13 @@ class LandsatDataset(Dataset):
         self.data = dataset["data"]
         self.targets = dataset["targets"]
         self.num_examples = len(self.data)
+        # self.transforms = transform
+
     def __getitem__(self, index):
         return self.data[index], self.targets[index]
+        # tensor_data = self.transforms(self.data[index])
+        # return tensor_data, self.targets[index]
+
     def __len__(self):
         return self.num_examples
 

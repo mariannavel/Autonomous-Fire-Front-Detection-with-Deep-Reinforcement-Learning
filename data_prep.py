@@ -3,15 +3,16 @@ import pickle
 from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
-from Seg_generator import *
+import os
 
 IMG_PATH = 'data/images6179/'
 MSK_PATH = 'data/voting_masks6179'
 
 def binarize_masks(M_LR_vec):
     """
-    M_LR_vec: 118 x 17 ndarray
-    output: a boolean vector with value True corresponding to images with fire
+    Called when training PatchDrop on Landsat-8 with classifier.
+    :param M_LR_vec: 118 x 17 ndarray
+    :return: boolean vector with value True corresponding to images with fire
     """
     # the last column indicates whether there is no patch to sample
     # 1 for entries that have no fire
@@ -19,14 +20,17 @@ def binarize_masks(M_LR_vec):
     # I need to take the complement of the last column
     return [not val for val in last_col]
 
-def save_image(img, name):
+def save_image(img, path):
     plt.imshow(img)
     plt.axis(False)
-    plt.savefig(name)
+    plt.savefig(path)
 
 def split_and_save(data, labels, data_dir = "data/"):
-    # Split train-test set and save them
-    # data: HR images
+    """
+    Split data to train-test set and save them to given directory.
+    :param data: HR images
+    :param data_dir: path to save the split data
+    """
     X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.15)
     trainset = {"data": X_train, "targets": y_train}
     testset = {"data": X_test, "targets": y_test}
@@ -37,7 +41,10 @@ def split_and_save(data, labels, data_dir = "data/"):
         pickle.dump(testset, f)
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
-
+    """
+    Load .mat dataset of 118 samples.
+    :param data_dir:
+    """
     D = loadmat(data_dir+"AFD_data_17_classes.mat")
     # for key, value in D.items():
     #     print(key)
@@ -51,7 +58,8 @@ def load_mat_data(data_dir = "data/Landsat-8/"):
     M_HR_patch=D['M_HR_patch'] # 17 patches of 64x64
 
     # Cut off 3 channels out of 10
-    # "we used channels c7 , c6 and c2 to compose the RGB bands, however, the original patches contain 10 bands"
+    # "we used channels c7 , c6 and c2 to compose the RGB bands,
+    # however, the original patches contain 10 bands"
     I_HR=I_HR[:,:,:,[6,5,1]]
     I_LR=I_LR[:,:,:,[6,5,1]]
     I_HR_patch=I_HR_patch[:,:,:,:,[6,5,1]]
@@ -62,12 +70,11 @@ def load_mat_data(data_dir = "data/Landsat-8/"):
 
     # plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR_vec, I_HR_patch, M_HR_patch)
 
-    # bool_targets = binarize_masks(M_LR_vec) # 118 entries
-    #
-    # for i, target in enumerate(bool_targets):
-    #     if target == True:
-    #         save_image(I_HR[i], "HR_image"+str(i)+".png")
-    #         save_image(I_LR[i], "LR_image"+str(i)+".png")
+# bool_targets = binarize_masks(M_LR_vec) # 118 entries
+# for i, target in enumerate(bool_targets):
+#     if target == True:
+#         save_image(I_HR[i], "HR_image"+str(i)+".png")
+#         save_image(I_LR[i], "LR_image"+str(i)+".png")
 
 img_filelist = sorted(os.listdir(IMG_PATH))
 msk_filelist = sorted(os.listdir(MSK_PATH))

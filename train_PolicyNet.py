@@ -2,7 +2,7 @@
 This file trains the policy network using the U-Net architecture
 as a policy evaluation step.
 How to Run on Different Benchmarks:
-    python pretrain.py --model ResNet_Landsat8, CNN_Landsat8
+    python train_PolicyNet.py --model ResNet_Landsat8, ResNet18_Landsat8 CNN_Landsat8
        --lr 1e-4
        --cv_dir checkpoint directory
        --batch_size 1048 (Higher is better)
@@ -10,7 +10,9 @@ How to Run on Different Benchmarks:
        --LR_size 8, 56 (Depends on the dataset)
 """
 import os
-import torch
+import pickle
+import torch.nn as nn
+# from torch.nn.parallel import DistributedDataParallel as DDP
 # Autograd automatically supports Tensors with requires_grad set to True
 import torch.utils.data as torchdata
 import tqdm
@@ -33,12 +35,12 @@ WEIGHTS_FILE ='cv/tmp/Landsat-8/unet/model_unet_voting_final_weights.h5'
 import argparse
 parser = argparse.ArgumentParser(description='Policy Network Training')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate') # DECREASED lr 0.01 --> 0.001
-parser.add_argument('--model', default='ResNet_Landsat8', help='R<depth>_<dataset> see utils.py for a list of configurations')
+parser.add_argument('--model', default='ResNet18_Landsat8', help='R<depth>_<dataset> see utils.py for a list of configurations')
 parser.add_argument('--ckpt_hr_cl', help='checkpoint directory for the high resolution classifier')
 parser.add_argument('--data_dir', default='data/', help='data directory')
 parser.add_argument('--load', default=None, help='checkpoint to load agent from')
 parser.add_argument('--cv_dir', default='cv/tmp/', help='checkpoint directory (models and logs are saved here)')
-parser.add_argument('--batch_size', type=int, default=64, help='batch size') # INCREASED batch size 8 --> 16 --> 32 --> 64
+parser.add_argument('--batch_size', type=int, default=64, help='batch size') # INCREASED batch size 8 --> 16 --> 32 --> 64 --(2K dset)--> SIGKILL
 parser.add_argument('--max_epochs', type=int, default=1000, help='total epochs to run')
 parser.add_argument('--parallel', action ='store_true', default=False, help='use multiple GPUs for training')
 parser.add_argument('--penalty', type=float, default=-0.5, help='to penalize the PN for incorrect predictions')
@@ -60,7 +62,6 @@ def train(epoch):
 
     for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(trainloader), total=len(trainloader), disable=True):
 
-        # if args.parallel:
         inputs = inputs.to(device)
         targets = targets.to(device)
 
@@ -84,8 +85,8 @@ def train(epoch):
         # --POLICY NETWORK DONE--
 
         # Agent sampled high resolution images
-        maskedHR_baseline = utils.get_agent_masked_image(inputs.clone(), baseline_actions, mappings, patch_size)
-        maskedHR_sampled = utils.get_agent_masked_image(inputs.clone(), agent_actions.int(), mappings, patch_size)
+        maskedHR_baseline = utils.get_agent_masked_image(inputs, baseline_actions, mappings, patch_size)
+        maskedHR_sampled = utils.get_agent_masked_image(inputs, agent_actions.int(), mappings, patch_size)
         # get_agent_masked_image(): get patches of input based on policy arg 2
 
         # Input (masked HR) images to the Segmentation Network
@@ -141,7 +142,6 @@ def test(epoch):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(testloader), total=len(testloader)):
 
-            # if args.parallel:
             inputs.to(device)
             targets.to(device)
 
@@ -190,14 +190,12 @@ trainset, testset = utils.get_dataset(args.model, args.data_dir)
 # visualize_images(trainset.data, trainset.targets, "train sample")
 # visualize_images(testset.data, testset.targets, "test sample")
 trainloader = torchdata.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-testloader = torchdata.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0) # NUM WORKERS !!!!
+testloader = torchdata.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0) # num workers 0 for debugging !!!
 
-# device = "cuda" if torch.cuda.is_available() else "cpu"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # 1. Load the Agent
-agent = utils.get_model('ResNet_Landsat8')
-agent.to(device) # next(agent.parameters()).is_cuda
+agent = utils.get_model(args.model)
 print('Agent loaded')
 
 # Save the log values to the checkpoint directory
@@ -226,9 +224,12 @@ if args.load is not None:
     print("Pretrained agent loaded")
 
 # Parallelize the models if multiple GPUs available - Important for Large Batch Size
-# if args.parallel:
-#     agent = nn.DataParallel(agent)
-#     unet = nn.DataParallel(unet)
+if args.parallel and torch.cuda.device_count() > 1:
+    agent = nn.DataParallel(agent)
+    pytorch_unet = nn.DataParallel(pytorch_unet)
+# torch.cuda.device_count() == 1 ---> I can't use GPU parallelization :(
+
+agent.to(device) # next(agent.parameters()).is_cuda
 
 optimizer = optim.Adam(agent.parameters(), lr=args.lr)
 
@@ -236,6 +237,7 @@ exp_return = []
 start_time = time.time()
 
 # OTAN TO TREXEIS ME > 1 image sto batch EPANEFERE TO BATCHNORM
+# trainset.num_examples > 1
 for epoch in range(start_epoch, start_epoch+args.max_epochs):
     train(epoch)
     if epoch % args.test_interval == 0:
@@ -243,7 +245,10 @@ for epoch in range(start_epoch, start_epoch+args.max_epochs):
 
 print(f'Expected Return: {sum(exp_return)/len(exp_return)}')
 print(f'Runtime (sec): {time.time()-start_time}')
-# torch.save(agent.state_dict(), f"checkpoints/Policy_ResNet_{len(trainset)}_train_images_{args.max_epochs+start_epoch-1}_epochs.pt")
+
+# Save the rewards
+with open("rewards", "wb") as fp:
+    pickle.dump(exp_return, fp)
 
 plt.figure()
 plt.semilogy(exp_return)

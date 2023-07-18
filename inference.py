@@ -59,7 +59,7 @@ def load_images(num, datapath):
 test_images, seg_masks = load_images(num_test, 'data/train85.pkl')
 
 PolicyNetwork = utils.get_model('ResNet_Landsat8')
-state_dict = torch.load(f"checkpoints/Policy_ckpt_E_1000_R_0.426_Res")
+state_dict = torch.load(f"checkpoints/Policy_ckpt_E_1000_R_0.478_Res")
 PolicyNetwork.load_state_dict(state_dict["agent"])
 print("Loaded the trained agent!")
 
