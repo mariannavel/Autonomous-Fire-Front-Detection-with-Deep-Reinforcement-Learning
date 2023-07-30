@@ -4,7 +4,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 import torchvision.datasets as torchdata
 import torchvision.models as torchmodels
-from tensorboard_logger import log_value
+# from tensorboard_logger import log_value
 import numpy as np
 import shutil
 # from random import randint, sample

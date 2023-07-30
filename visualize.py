@@ -10,6 +10,14 @@ MSK_PATH = 'data/voting_masks'
 MAX_PIXEL_VALUE = 65535 # used to normalize the image
 TH_FIRE = 0.25 # fire threshold
 
+def visualize_image(image, title=''):
+    # input ndarray: 256 x 256 x 3
+    plt.imshow(image)
+    plt.title(title)
+    plt.axis('off')
+    plt.tight_layout()
+    plt.show()
+
 def visualize_images(images, masks, title=''):
     # input ndarray: n x 256 x 256 x 3
     # 1, 4, 6, 9, 10, 13, 19, 21, 26, 33, 38, 42, 55, 58, 66, 67 --> fire present (train)

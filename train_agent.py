@@ -2,7 +2,7 @@
 This file trains the policy network using the U-Net architecture
 as a policy evaluation step.
 How to Run on Different Benchmarks:
-    python train_PolicyNet.py --model ResNet_Landsat8, ResNet18_Landsat8 CNN_Landsat8
+    python train_agent.py --model ResNet_Landsat8, ResNet18_Landsat8 CNN_Landsat8
        --lr 1e-4
        --cv_dir checkpoint directory
        --batch_size 1048 (Higher is better)
