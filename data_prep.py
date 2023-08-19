@@ -4,9 +4,11 @@ from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import os
+from SegNet.utils import get_img_762bands, get_mask_arr
+from visualize import visualize_image
 
-IMG_PATH = 'data/images6179/'
-MSK_PATH = 'data/voting_masks6179'
+IMG_PATH = 'data/images100/'
+MSK_PATH = 'data/voting_masks100'
 
 def binarize_masks(M_LR_vec):
     """
@@ -76,18 +78,39 @@ def load_mat_data(data_dir = "data/Landsat-8/"):
 #         save_image(I_HR[i], "HR_image"+str(i)+".png")
 #         save_image(I_LR[i], "LR_image"+str(i)+".png")
 
-img_filelist = sorted(os.listdir(IMG_PATH))
-msk_filelist = sorted(os.listdir(MSK_PATH))
+def make_pd_sig_dset():
+    img_filelist = sorted(os.listdir(IMG_PATH))
+    msk_filelist = sorted(os.listdir(MSK_PATH))
 
-images = []
-masks = []
-for i, (fn_img, fn_mask) in enumerate(zip(img_filelist, msk_filelist)):
+    images = []
+    masks = []
+    for i, (fn_img, fn_mask) in enumerate(zip(img_filelist, msk_filelist)):
 
-    if i == 4000: break  # because the amount of data causes SIGKILL ... to be examined
-    img3c = get_img_762bands(os.path.join(IMG_PATH, fn_img))  # give the image path
-    mask = get_mask_arr(os.path.join(MSK_PATH, fn_mask)) # mask path
-    images.append(img3c)
-    masks.append(mask)
-    print(f"saved {fn_img}")
+        if i == 4000: break  # because the amount of data causes SIGKILL ... to be examined
+        img3c = get_img_762bands(os.path.join(IMG_PATH, fn_img))  # give the image path
+        mask = get_mask_arr(os.path.join(MSK_PATH, fn_mask)) # mask path
+        images.append(img3c)
+        masks.append(mask)
+        print(f"saved {fn_img}")
 
-split_and_save(np.asarray(images), np.asarray(masks))
+    split_and_save(np.asarray(images), np.asarray(masks))
+
+def make_agent_dset(img_path=IMG_PATH):
+
+    images = []
+
+    with open("data/agent_targets", "rb") as fp:
+        labels = pickle.load(fp) # list of 100 vectors (lists)
+
+    for fn_img in sorted(os.listdir(img_path)):
+
+        img3c = get_img_762bands(os.path.join(IMG_PATH, fn_img))  # give the image path
+        # label = labels[fn_img.replace('RT_', 'RT_Voting_')]
+        # visualize_image(img3c)
+        images.append(img3c)
+        print(f"saved {fn_img}")
+
+    split_and_save(np.asarray(images), np.asarray(labels))
+
+
+make_agent_dset()

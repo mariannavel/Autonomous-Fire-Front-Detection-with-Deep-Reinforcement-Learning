@@ -4,9 +4,10 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 import torchvision.datasets as torchdata
 import torchvision.models as torchmodels
-# from tensorboard_logger import log_value
+from tensorboard_logger import log_value
 import numpy as np
 import shutil
+
 # from random import randint, sample
 from utils.custom_dataloader import CustomDatasetFromImages, LandsatDataset, LandsatSubset
 import matplotlib.pyplot as plt
@@ -119,7 +120,7 @@ def get_agent_masked_image(input_org, policy, mappings, patch_size):
         sampled_img[:, :, mappings[pl_ind][0]:mappings[pl_ind][0]+patch_size, mappings[pl_ind][1]:mappings[pl_ind][1]+patch_size] *= mask.unsqueeze(1).unsqueeze(1).unsqueeze(1).float()
     input_org = sampled_img
 
-    return input_org.cuda()
+    return input_org.to(device) #.cuda()
 
 def action_space_model(dset):
     # Model the action space by dividing the image space into equal size patches
@@ -147,7 +148,7 @@ def action_space_model(dset):
 def get_dataset(model, root='data/'):
 
     rnet, dset = model.split('_')
-    transform_train, transform_test = get_transforms(dset) # edw mporw na kanw resize tis eikones
+    # transform_train, transform_test = get_transforms(dset) # edw mporw na kanw resize tis eikones
 
     if dset=='Landsat8':
         trainset = LandsatDataset(root + 'train1700.pkl')

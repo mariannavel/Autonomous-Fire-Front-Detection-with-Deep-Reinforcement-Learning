@@ -18,11 +18,11 @@ def get_mask_arr(path):
     return seg
 
 def load_images_from_folder(folder):
-    images = []
-    for filename in os.listdir(folder):
+    images = {}
+    for filename in sorted(os.listdir(folder)):
         img = get_mask_arr(os.path.join(folder, filename)) #cv2.imread(os.path.join(folder,filename))
         if img is not None:
-            images.append(img)
+            images[filename] = img
     return images
 
 def count_fire_pixels(images):
@@ -100,22 +100,22 @@ def make_img_labels(seg_masks):
     seg_masks: the binary segmentation masks
     """
     label_vec = []
-    for mask in seg_masks:
-        patches = split_in_patches(mask) # list of 16 patches
+    for mask_key in seg_masks:
+        patches = split_in_patches(seg_masks[mask_key]) # list of 16 patches
         num_fire_pixels = count_fire_pixels(patches)
         label_vec.append(get_label(num_fire_pixels))
 
     return label_vec
 
 
-# seg_masks = load_images_from_folder("data/voting_masks100")
-#
-# # fire_pixl_distr = count_fire_pixels(seg_masks)
-#
-# targets = make_img_labels(seg_masks)
-#
-# with open("data/agent_targets", "wb") as fp:
-#     pickle.dump(targets, fp)
+if __name__ == "__main__":
+    seg_masks = load_images_from_folder("data/voting_masks100")
+    # fire_pixl_distr = count_fire_pixels(seg_masks)
+    # plot_pixl_hist(fire_pixl_distr, scale="log")
+    targets = make_img_labels(seg_masks)
 
-with open("data/agent_targets", "rb") as fp:
-    targets = pickle.load(fp) # list of 100 vectors (lists)
+    with open("data/agent_targets", "wb") as fp:
+        pickle.dump(targets, fp)
+
+    # with open("data/agent_targets", "rb") as fp:
+    #     targets = pickle.load(fp) # list of 100 vectors (lists)
