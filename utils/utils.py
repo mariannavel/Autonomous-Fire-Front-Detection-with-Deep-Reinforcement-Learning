@@ -58,7 +58,23 @@ def compute_reward(preds, targets, policy, penalty):
 
 def get_transforms(dset):
 
-    if dset=='C10' or dset=='C100':
+    if dset=='Landsat8':
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+        transform_train = transforms.Compose([
+            # transforms.resise(224),
+            transforms.RandomCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std)
+        ])
+        transform_test = transforms.Compose([
+            # transforms.resize(224),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std)
+        ])
+
+    elif dset=='C10' or dset=='C100':
         mean = [x/255.0 for x in [125.3, 123.0, 113.9]]
         std = [x/255.0 for x in [63.0, 62.1, 66.7]]
         transform_train = transforms.Compose([
@@ -73,7 +89,7 @@ def get_transforms(dset):
             transforms.Normalize(mean, std)
             ])
 
-    elif dset=='ImgNet' or dset=='Landsat8':
+    elif dset=='ImgNet':
         mean = [0.485, 0.456, 0.406]
         std = [0.229, 0.224, 0.225]
         transform_train = transforms.Compose([

@@ -37,11 +37,11 @@ class BasicBlock(nn.Module):
         identity = x
 
         out = self.conv1(x)
-        if out.shape[0] > 1:  # batch size
+        if out.shape[0] > 1:  # batch size or last batch
             out = self.bn1(out)
         out = self.relu(out)
         out = self.conv2(out)
-        if out.shape[0] > 1:  # batch size
+        if out.shape[0] > 1:  # batch size or last batch
             out = self.bn2(out)
 
         if self.downsample is not None:
