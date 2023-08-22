@@ -136,7 +136,7 @@ def train(epoch):
 
 def test(epoch):
 
-    agent.eval() # flag: deactivate training (gradient update) mode
+    # agent.eval() # flag: deactivate training (gradient update) mode
 
     rewards, policies, dice_coef = [], [], []
     with torch.no_grad():

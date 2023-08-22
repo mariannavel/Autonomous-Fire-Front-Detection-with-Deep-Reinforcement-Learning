@@ -1,3 +1,7 @@
+"""
+This file makes the data preparation before training of the PatchDrop components.
+"""
+
 import numpy as np
 import pickle
 from scipy.io import loadmat
@@ -6,6 +10,7 @@ import matplotlib.pyplot as plt
 import os
 from SegNet.utils import get_img_762bands, get_mask_arr
 from visualize import visualize_image
+from EDA import split_in_patches, count_fire_pixels, get_label
 
 IMG_PATH = 'data/images100/'
 MSK_PATH = 'data/voting_masks100'
@@ -44,8 +49,8 @@ def split_and_save(data, labels, data_dir = "data/"):
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
     """
-    Load .mat dataset of 118 samples.
-    :param data_dir:
+    Load .mat dataset of 118 samples in memory.
+    :param data_dir
     """
     D = loadmat(data_dir+"AFD_data_17_classes.mat")
     # for key, value in D.items():
@@ -78,7 +83,36 @@ def load_mat_data(data_dir = "data/Landsat-8/"):
 #         save_image(I_HR[i], "HR_image"+str(i)+".png")
 #         save_image(I_LR[i], "LR_image"+str(i)+".png")
 
-def make_pd_sig_dset():
+def load_images_from_folder(folder):
+    images = {}
+    for filename in sorted(os.listdir(folder)):
+        img = get_mask_arr(os.path.join(folder, filename)) #cv2.imread(os.path.join(folder,filename))
+        if img is not None:
+            images[filename] = img
+    return images
+
+def make_img_labels(seg_masks):
+    """
+    This function returns the labels of Policy Network as binary vectors,
+    based on the percentage of fire pixels in each patch.
+
+    :param seg_masks: the binary segmentation masks (returned by EDA.load_images_from_folder("data/voting_masks100"))
+    """
+    label_vec = []
+    for mask_key in seg_masks:
+        patches = split_in_patches(seg_masks[mask_key]) # list of 16 patches
+        num_fire_pixels = count_fire_pixels(patches)
+        label_vec.append(get_label(num_fire_pixels))
+
+    # with open("data/agent_targets", "wb") as fp:
+    #     pickle.dump(label_vec, fp)
+    return label_vec
+
+def make_PN_SIG_dset():
+    """
+    Saves the images and their segmentation masks (targets) as train-test set
+    for the training of PatchDrop with Semantic Image Segmentation.
+    """
     img_filelist = sorted(os.listdir(IMG_PATH))
     msk_filelist = sorted(os.listdir(MSK_PATH))
 
@@ -95,11 +129,17 @@ def make_pd_sig_dset():
 
     split_and_save(np.asarray(images), np.asarray(masks))
 
-def make_agent_dset(img_path=IMG_PATH):
+def make_PN_dset(img_path=IMG_PATH, target_path="data/agent_targets"):
+    """
+    Takes the images path and the PN targets' path and saves them as train-test set
+    for the training of Policy Network standalone.
+    :param img_path: the path of the dataset images
+    :param target_path: the path of the binary vector targets of PN
+    """
 
     images = []
 
-    with open("data/agent_targets", "rb") as fp:
+    with open(target_path, "rb") as fp:
         labels = pickle.load(fp) # list of 100 vectors (lists)
 
     for fn_img in sorted(os.listdir(img_path)):
@@ -113,4 +153,9 @@ def make_agent_dset(img_path=IMG_PATH):
     split_and_save(np.asarray(images), np.asarray(labels))
 
 
-make_agent_dset()
+masks = load_images_from_folder("data/voting_masks100")
+labels = make_img_labels(masks)
+with open("data/agent_targets", "wb") as fp:
+    pickle.dump(labels, fp)
+
+make_PN_dset()

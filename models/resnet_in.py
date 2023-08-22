@@ -179,7 +179,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def _forward_impl(self, x):
+    def _forward_impl(self, x, activation):
         # See note [TorchScript super()]
         x = self.conv1(x)
         x = self.bn1(x) # when testing model for 1 sample we don't need (and cannot apply) bn
@@ -195,12 +195,13 @@ class ResNet(nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
-        x = torch.sigmoid(x)
+        if activation:
+            x = torch.sigmoid(x)
 
         return x
 
-    def forward(self, x):
-        return self._forward_impl(x)
+    def forward(self, x, activation=True):
+        return self._forward_impl(x, activation)
 
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
