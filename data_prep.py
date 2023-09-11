@@ -5,15 +5,14 @@ This file makes the data preparation before training of the PatchDrop components
 import numpy as np
 import pickle
 from scipy.io import loadmat
-from sklearn.model_selection import train_test_split
+# from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import os
 from SegNet.utils import get_img_762bands, get_mask_arr
 from visualize import visualize_image
 from EDA import split_in_patches, count_fire_pixels, get_label
 
-IMG_PATH = 'data/images100/'
-MSK_PATH = 'data/voting_masks100'
+NUM_SAMPLES = 1000 # I have memory error with more than 2000 data (cannot dump)
 
 def binarize_masks(M_LR_vec):
     """
@@ -26,26 +25,6 @@ def binarize_masks(M_LR_vec):
     last_col = M_LR_vec[:,-1]
     # I need to take the complement of the last column
     return [not val for val in last_col]
-
-def save_image(img, path):
-    plt.imshow(img)
-    plt.axis(False)
-    plt.savefig(path)
-
-def split_and_save(data, labels, data_dir = "data/"):
-    """
-    Split data to train-test set and save them to given directory.
-    :param data: HR images
-    :param data_dir: path to save the split data
-    """
-    X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.15)
-    trainset = {"data": X_train, "targets": y_train}
-    testset = {"data": X_test, "targets": y_test}
-
-    with open(data_dir + 'train.pkl', 'wb') as f:
-        pickle.dump(trainset, f)
-    with open(data_dir + 'test.pkl', 'wb') as f:
-        pickle.dump(testset, f)
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
     """
@@ -77,21 +56,58 @@ def load_mat_data(data_dir = "data/Landsat-8/"):
 
     # plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR_vec, I_HR_patch, M_HR_patch)
 
-# bool_targets = binarize_masks(M_LR_vec) # 118 entries
-# for i, target in enumerate(bool_targets):
-#     if target == True:
-#         save_image(I_HR[i], "HR_image"+str(i)+".png")
-#         save_image(I_LR[i], "LR_image"+str(i)+".png")
+def save_image(img, path):
+    plt.imshow(img)
+    plt.axis(False)
+    plt.savefig(path)
 
-def load_images_from_folder(folder):
+def train_test_split(data, labels, test_size):
+    """
+    Provides a split on the data based on the given test size.
+    :param data (array-like): The input data
+    :param labels (array-like): The corresponding labels
+    :param test_size: percentage between 0 and 1 -> size of test set
+    :return: train and test data, train and test labels
+    """
+
+    num_samples = len(data)
+    num_test_samples = int(test_size * num_samples)
+    # shuffled_indices = np.random.permutation(num_samples)
+    test_indices = np.arange(0, num_test_samples)
+    train_indices = np.arange(num_test_samples, num_samples)
+
+    X_train = data[train_indices]
+    X_test = data[test_indices]
+    y_train = labels[train_indices]
+    y_test = labels[test_indices]
+
+    return X_train, X_test, y_train, y_test
+
+def split_and_save(data, labels, data_dir = "data/", split_ratio=0.2):
+    """
+    Split data to train-test set and save them to given directory.
+    :param data: HR images
+    :param data_dir: path to save the split data
+    """
+    X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=split_ratio)
+    trainset = {"data": X_train, "targets": y_train}
+    testset = {"data": X_test, "targets": y_test}
+
+    with open(data_dir + 'train.pkl', 'wb') as f:
+        pickle.dump(trainset, f)
+    with open(data_dir + 'test.pkl', 'wb') as f:
+        pickle.dump(testset, f)
+
+def load_images_from_folder(folder, max_num):
     images = {}
-    for filename in sorted(os.listdir(folder)):
+    for i, filename in enumerate(sorted(os.listdir(folder))):
+        if i == max_num: break
         img = get_mask_arr(os.path.join(folder, filename)) #cv2.imread(os.path.join(folder,filename))
         if img is not None:
             images[filename] = img
     return images
 
-def make_img_labels(seg_masks):
+def get_custom_labels(seg_masks):
     """
     This function returns the labels of Policy Network as binary vectors,
     based on the percentage of fire pixels in each patch.
@@ -108,28 +124,28 @@ def make_img_labels(seg_masks):
     #     pickle.dump(label_vec, fp)
     return label_vec
 
-def make_PN_SIG_dset():
+def make_PN_SIG_dset(img_path, target_path, max_num, split_ratio):
     """
     Saves the images and their segmentation masks (targets) as train-test set
     for the training of PatchDrop with Semantic Image Segmentation.
     """
-    img_filelist = sorted(os.listdir(IMG_PATH))
-    msk_filelist = sorted(os.listdir(MSK_PATH))
+    img_filelist = sorted(os.listdir(img_path))
+    msk_filelist = sorted(os.listdir(target_path))
 
     images = []
     masks = []
     for i, (fn_img, fn_mask) in enumerate(zip(img_filelist, msk_filelist)):
 
-        if i == 4000: break  # because the amount of data causes SIGKILL ... to be examined
-        img3c = get_img_762bands(os.path.join(IMG_PATH, fn_img))  # give the image path
-        mask = get_mask_arr(os.path.join(MSK_PATH, fn_mask)) # mask path
+        if i == max_num: break  # because the amount of data causes SIGKILL ... to be examined
+        img3c = get_img_762bands(os.path.join(img_path, fn_img))  # give the image path
+        mask = get_mask_arr(os.path.join(target_path, fn_mask)) # mask path
         images.append(img3c)
         masks.append(mask)
         print(f"saved {fn_img}")
 
-    split_and_save(np.asarray(images), np.asarray(masks))
+    split_and_save(np.asarray(images), np.asarray(masks), split_ratio=split_ratio)
 
-def make_PN_dset(img_path=IMG_PATH, target_path="data/agent_targets"):
+def make_PN_dset(img_path, target_path, max_num, split_ratio):
     """
     Takes the images path and the PN targets' path and saves them as train-test set
     for the training of Policy Network standalone.
@@ -142,20 +158,27 @@ def make_PN_dset(img_path=IMG_PATH, target_path="data/agent_targets"):
     with open(target_path, "rb") as fp:
         labels = pickle.load(fp) # list of 100 vectors (lists)
 
-    for fn_img in sorted(os.listdir(img_path)):
-
-        img3c = get_img_762bands(os.path.join(IMG_PATH, fn_img))  # give the image path
+    for i, fn_img in enumerate(sorted(os.listdir(img_path))):
+        if i == max_num: break
+        img3c = get_img_762bands(os.path.join(img_path, fn_img))  # give the image path
         # label = labels[fn_img.replace('RT_', 'RT_Voting_')]
         # visualize_image(img3c)
         images.append(img3c)
         print(f"saved {fn_img}")
 
-    split_and_save(np.asarray(images), np.asarray(labels))
+    split_and_save(np.asarray(images), np.asarray(labels), split_ratio=split_ratio)
 
+# masks = load_images_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
+# labels = make_img_labels(masks)
+# with open(f"data/agent_targets_{NUM_SAMPLES}", "wb") as fp:
+#     pickle.dump(labels, fp)
 
-masks = load_images_from_folder("data/voting_masks100")
-labels = make_img_labels(masks)
-with open("data/agent_targets", "wb") as fp:
-    pickle.dump(labels, fp)
+# make_PN_SIG_dset(img_path="data/images100",
+#              target_path=f"data/voting_masks100",
+#              max_num=NUM_SAMPLES,
+#              split_ratio=0.15)
 
-make_PN_dset()
+# make_PN_dset(img_path="data/images100",
+#              target_path=f"data/agent_targets_100",
+#              max_num=NUM_SAMPLES,
+#              split_ratio=0.15)

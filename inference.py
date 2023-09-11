@@ -2,17 +2,17 @@ import torch
 from utils import utils
 from utils.custom_dataloader import LandsatDataset
 import numpy as np
-from visualize import visualize_images
+from SegNet.unet_models_pytorch import get_model_pytorch
+from segnet import *
+from visualize import visualize_image, visualize_images
 
-LR_size = 32
-num_test = 21
+LR_size = 16 # PN input dims
 
-def inference(images, mappings, patch_size):
-    """ Get the agent masked images from input based
-        on the policy distribution output """
+def inference(model, images, mappings, patch_size):
+    """ Get the agent masked images from input,
+    based on the policy distribution output """
 
     images = images.permute(0, 3, 1, 2)
-    # plot the image to validate correctness...
 
     # Get the low resolution agent images
     input_agent = images.clone()
@@ -20,7 +20,7 @@ def inference(images, mappings, patch_size):
 
     # get the probability distribution output of PN
     # probs = torch.sigmoid(PolicyNetwork(input_agent))
-    probs = PolicyNetwork(input_agent)
+    probs = model(input_agent)
 
     # Sample the test-time policy
     policy = probs.data.clone()
@@ -32,43 +32,99 @@ def inference(images, mappings, patch_size):
 
     return masked_image
 
-def load_images(num, datapath):
+def load_images_PD_SIS(datapath, num=0):
     """ num: in [1, 21] number of images from the selected Landsat-8 dataset
         return: num tensor images """
 
-    fire_idx = [1, 4, 6, 9, 10, 13, 19, 21, 26, 33, 38, 42, 55, 58, 66, 67, 69, 70, 78, 80, 82]
+    # fire_idx = [1, 4, 6, 9, 10, 13, 19, 21, 26, 33, 38, 42, 55, 58, 66, 67, 69, 70, 78, 80, 82]
 
     # ndarray: n x 256 x 256 x 3
     dataset = LandsatDataset(datapath)
 
     # get num random images from "fired images" set
     # indexes = np.random.randint(0, len(fire_idx), num)
-    indexes = np.arange(0, len(fire_idx))
+    indexes = np.arange(0, len(dataset.data)) # len(fire_idx)
 
-    ret_data = torch.empty((num, 256, 256, 3))
-    ret_masks = torch.empty((num, 256, 256, 1))
-    for k, i in enumerate(indexes):
-        ret_data[k] = torch.from_numpy(dataset.data[fire_idx[i]])
-        ret_masks[k] = torch.from_numpy(dataset.targets[fire_idx[i]])
+    ret_data = torch.empty((len(indexes), 256, 256, 3))
+    ret_masks = torch.empty((len(indexes), 256, 256, 1))
+    for i in indexes:
+        ret_data[i] = torch.from_numpy(dataset.data[i])
+        ret_masks[i] = torch.from_numpy(dataset.targets[i])
 
     return ret_data, ret_masks
 
+def load_images_PN(datapath, num=0):
+    # ndarray: n x 256 x 256 x 3
+    dataset = LandsatDataset(datapath)
 
-# def __main__():
+    indexes = np.arange(0, len(dataset.data))  # len(dataset.data)
 
-test_images, seg_masks = load_images(num_test, 'data/train85.pkl')
+    ret_data = torch.empty((len(indexes), 256, 256, 3))
+    ret_labels = torch.empty((len(indexes), 16))
+    for i in indexes:
+        ret_data[i] = torch.from_numpy(dataset.data[i])
+        ret_labels[i] = torch.from_numpy(dataset.targets[i])
 
-PolicyNetwork = utils.get_model('ResNet18_Landsat8')
-state_dict = torch.load(f"checkpoints/Policy_ckpt_E_500_R_0.402_Res", map_location=torch.device('cpu'))
-PolicyNetwork.load_state_dict(state_dict["agent"])
-print("Loaded the trained agent!")
+    return ret_data, ret_labels
 
-# get agent action space
-mappings, _, patch_size = utils.action_space_model('Landsat8')
+def get_model_results(images, model, ckpt_path, device, mode="Test"):
 
-masked_images = inference(test_images, mappings, patch_size)
+    # Load model and weights
+    PolicyNetwork = utils.get_model(model)
+    state_dict = torch.load(ckpt_path, map_location=torch.device('cpu'))
+    PolicyNetwork.load_state_dict(state_dict["agent"])
 
-# transform before visualization
-masked_images = masked_images.permute(0, 2, 3, 1).cpu().numpy()
-seg_masks = seg_masks.cpu().numpy()
-visualize_images(masked_images, seg_masks, "agent prediction vs U-Net target")
+    # Get agent action space
+    mappings, _, patch_size = utils.action_space_model('Landsat8')
+
+    masked_images = inference(PolicyNetwork, images, mappings, patch_size).to(device)
+
+    # Transform before visualization
+    masked_images = masked_images.permute(0,2,3,1).cpu().numpy()
+    # save the images to feed them to a U-Net later...
+    np.save("pretrainPN/masked_images", masked_images)
+    # labels = labels.cpu().numpy()
+    # visualize_images(images,
+    #              masked_images,
+    #              title=mode+" image: original vs masked",
+    #              savepath="pretrainPN/inference/")
+
+def compute_metrics(preds, targets):
+    dc = dice_coefficient(preds, targets)
+    iou = IoU(preds, targets)
+    return dc, iou
+
+if __name__ == "__main__":
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    # Load images on which the policy network was NOT trained
+    images, _ = load_images_PN(datapath='data/test_agent15.pkl', num=90)
+
+    # Feed them to PN and save the produced masks
+    # get_model_results(images,
+    #         model='ResNet_Landsat8',
+    #         ckpt_path="pretrainPN/checkpoints/PN_pretrain_E_20_F1_0.000",
+    #         device=device,
+    #         mode="Test")
+
+    # load masked images as tensors
+    masked_images = torch.from_numpy(np.load("pretrainPN/masked_images.npy")).permute(0,3,1,2)
+    # load U-Net
+    unet = get_model_pytorch(model_name='unet', n_filters=16, n_channels=3)
+    # load weights
+    unet.load_state_dict(torch.load('cv/tmp/Landsat-8/unet/pytorch_unet.pt'))
+    unet.eval()
+
+    # Give masked images to U-Net and get their segment. mask
+    preds = get_SegNet_prediction(masked_images, unet, device)
+    # visualize_image(preds.cpu().permute(0,2,3,1))
+
+    # Load the target segment. masks of the original images
+    _, targets = load_images_PD_SIS(datapath='data/test15.pkl')
+    targets = targets.permute(0,3,1,2).to(device)
+
+    # Evaluate test performance
+    dc, iou = compute_metrics(preds, targets)
+
+    print("--- Evaluation of the custom-label ResNet on 15 samples ---")
+    print(f"Dice: {torch.mean(dc)} | IoU: {torch.mean(iou)}")

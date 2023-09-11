@@ -19,15 +19,21 @@ parser = argparse.ArgumentParser(description='Policy Network Pre-training')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--model', default='ResNet_Landsat8')
 parser.add_argument('--data_dir', default='data/', help='data directory')
-parser.add_argument('--cv_dir', default='checkpoints', help='checkpoint directory (models and logs are saved here)')
-parser.add_argument('--batch_size', type=int, default=16, help='batch size')
+parser.add_argument('--config_dir', default='pretrainPN/', help='configuration directory (models, args, logs are saved here)')
+parser.add_argument('--batch_size', type=int, default=32, help='batch size')
 parser.add_argument('--max_epochs', type=int, default=20, help='total epochs to run')
-parser.add_argument('--LR_size', type=int, default=32, help='Policy Network Image Size')
-parser.add_argument('--test_interval', type=int, default=10, help='Every how many epoch to test the model')
+parser.add_argument('--LR_size', type=int, default=16, help='Policy Network Image Size')
+parser.add_argument('--test_interval', type=int, default=1, help='Every how many epoch to test the model')
 parser.add_argument('--ckpt_interval', type=int, default=10, help='Every how many epoch to save the model')
 args = parser.parse_args()
 
 utils.save_args(__file__, args)
+
+def label_wise_accuracy(pred, target):
+    pred = (pred > 0.5).float()
+    matches = (pred == target).float()
+    label_accuracy = torch.mean(matches, dim=0)
+    return label_accuracy
 
 def train(model, epoch):
 
@@ -53,18 +59,21 @@ def train(model, epoch):
 
         with torch.no_grad():
             preds = torch.sigmoid(preds)
+            # acc = torch.mean(label_wise_accuracy(preds, targets)) # works same
+
             preds[preds < 0.5] = 0.0
             preds[preds >= 0.5] = 1.0
             matches = (preds == targets).int()
             accuracy = matches.sum(dim=1).sum() / (matches.shape[0] * matches.shape[1])
-            micro_f1 = f1_score(targets.cpu().numpy(), preds.cpu().numpy(), average='micro',
-                                labels=np.unique(preds.cpu().numpy()), zero_division=1)
+
+            weighted_f1 = f1_score(targets.cpu().numpy(), preds.cpu().numpy(), average='weighted',
+                                labels=np.unique(preds.cpu().numpy()), zero_division=0)
 
         # for input in inputs:
         #     visualize_image(input.permute(1,2,0).cpu())
         losses.append(loss.item())
         accuracies.append(accuracy.item())
-        f1_scores.append(micro_f1)
+        f1_scores.append(weighted_f1)
 
     avg_loss = sum(losses)/len(losses)
     avg_accuracy = sum(accuracies)/len(accuracies)
@@ -77,7 +86,7 @@ def train(model, epoch):
 
 def test(model, epoch):
 
-    accuracies, f1_scores = [], []
+    losses, accuracies, f1_scores = [], [], []
 
     for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(testloader), disable=True):
 
@@ -92,48 +101,54 @@ def test(model, epoch):
             logits = model.forward(inputs_agent, activation=False)
 
             preds = logits.type(torch.DoubleTensor).to(device)
+            loss = criterion(preds, targets)
             preds = torch.sigmoid(preds)
+
+            # acc = torch.mean(label_wise_accuracy(preds, targets))
             preds[preds < 0.5] = 0.0
             preds[preds >= 0.5] = 1.0
             matches = (preds == targets).int()
             accuracy = matches.sum(dim=1).sum() / (matches.shape[0] * matches.shape[1])
-            micro_f1 = f1_score(targets.cpu().numpy(), preds.cpu().numpy(), average='micro',
-                                labels=np.unique(preds.cpu().numpy()), zero_division=1)
 
+            weighted_f1 = f1_score(targets.cpu().numpy(), preds.cpu().numpy(), average='weighted',
+                                labels=np.unique(preds.cpu().numpy()), zero_division=0)
+
+        losses.append(loss.item())
         accuracies.append(accuracy.item())
-        f1_scores.append(micro_f1)
+        f1_scores.append(weighted_f1)
 
-        avg_accuracy = sum(accuracies) / len(accuracies)
-        avg_f1 = sum(f1_scores)/len(f1_scores)
-        # log_value(f'test_loss', avg_loss, epoch)
-        # log_value(f'test_accuracy', avg_accuracy, epoch)
-        # log_value(f'test_F1_score', avg_f1, epoch)
-        print(f"Test | accuracy: %.4f | F1-score: %.4f\n" % (avg_accuracy, avg_f1)) # dice coeff??
+    avg_loss = sum(losses) / len(losses)
+    avg_accuracy = sum(accuracies) / len(accuracies)
+    avg_f1 = sum(f1_scores)/len(f1_scores)
+    log_value(f'val_loss', avg_loss, epoch)
+    log_value(f'val_accuracy', avg_accuracy, epoch)
+    log_value(f'val_F1_score', avg_f1, epoch)
+    print(f"Test | loss: %.4f | accuracy: %.4f | F1-score: %.4f\n" % (avg_loss, avg_accuracy, avg_f1))
 
+    if epoch % args.ckpt_interval == 0:
         state = {
             'agent': model.state_dict(),
             'epoch': epoch,
             'accuracy': avg_accuracy,
             'F1-score': avg_f1
         }
-        torch.save(state, 'checkpoints/PN_pretrain_E_%d_F1_%.3f' % (epoch, avg_f1))
+        torch.save(state, args.config_dir+'/checkpoints/PN_pretrain_E_%d_F1_%.3f' % (epoch, avg_f1))
 
 if __name__ == "__main__":
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    logdir = 'pretrainPN/logs'
-    if not os.path.exists(logdir):
-        os.system('mkdir ' + logdir)
-    # Save the log values
-    configure(logdir, flush_secs=5)
+    # Save the log values for tensorboard logger
+    if not os.path.exists(args.config_dir+'/logs'):
+        os.system('mkdir ' + args.config_dir+'/logs')
+    configure(args.config_dir+'/logs', flush_secs=5)
 
-    if not os.path.exists(args.cv_dir):
-        os.system('mkdir ' + args.cv_dir)
+    if not os.path.exists(args.config_dir+'/checkpoints'):
+        os.system('mkdir ' + args.config_dir+'/checkpoints')
 
     # Load the images and targets
-    trainset = LandsatDataset('data/train_agent85.pkl')
-    testset = LandsatDataset('data/test_agent15.pkl')
+    trainset = LandsatDataset(args.data_dir+'train_agent85.pkl')
+    testset = LandsatDataset(args.data_dir+'test_agent15.pkl')
 
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     testloader = DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)
