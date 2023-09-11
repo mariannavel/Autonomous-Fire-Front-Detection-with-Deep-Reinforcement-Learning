@@ -10,28 +10,30 @@ MSK_PATH = 'data/voting_masks'
 MAX_PIXEL_VALUE = 65535 # used to normalize the image
 TH_FIRE = 0.25 # fire threshold
 
-def visualize_image(image, title=''):
+def visualize_image(set, title=''):
     # input ndarray: 256 x 256 x 3
-    plt.imshow(image)
-    plt.title(title)
-    plt.axis('off')
-    plt.tight_layout()
-    plt.show()
+    for image in set:
+        plt.imshow(image)
+        plt.title(title)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.show()
 
-def visualize_images(images, masks, title=''):
+def visualize_images(images, masks, title="", savepath=""):
     # input ndarray: n x 256 x 256 x 3
     # 1, 4, 6, 9, 10, 13, 19, 21, 26, 33, 38, 42, 55, 58, 66, 67 --> fire present (train)
     # 69, 70, 78, 80, 82 -> fire present (test)
     for i, (img, msk) in enumerate(zip(images, masks)):
         plt.subplot(1, 2, 1)
         plt.imshow(img)
+        plt.axis('off')
         plt.subplot(1, 2, 2)
         plt.imshow(msk)
-        plt.suptitle(title)
         plt.axis('off')
+        plt.suptitle(title)
         plt.tight_layout()
-        plt.show()
-        # plt.savefig(f"myplot{i}")
+        # plt.show()
+        plt.savefig(f"{savepath}myplot{i}")
 
 def plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR, I_HR_patch, M_HR_patch):
     """

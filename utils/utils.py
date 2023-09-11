@@ -13,8 +13,8 @@ from utils.custom_dataloader import CustomDatasetFromImages, LandsatDataset, Lan
 import matplotlib.pyplot as plt
 
 def save_args(__file__, args):
-    shutil.copy(os.path.basename(__file__), args.cv_dir)
-    with open(args.cv_dir+'/args.txt','w') as f:
+    shutil.copy(os.path.basename(__file__), args.config_dir)
+    with open(args.config_dir+'/args.txt','w') as f:
         f.write(str(args))
 
 def preprocess_inputs(LR_size, inputs, targets):
@@ -136,7 +136,7 @@ def get_agent_masked_image(input_org, policy, mappings, patch_size):
         sampled_img[:, :, mappings[pl_ind][0]:mappings[pl_ind][0]+patch_size, mappings[pl_ind][1]:mappings[pl_ind][1]+patch_size] *= mask.unsqueeze(1).unsqueeze(1).unsqueeze(1).float()
     input_org = sampled_img
 
-    return input_org.to(device) #.cuda()
+    return input_org #.to(device) #.cuda()
 
 def action_space_model(dset):
     # Model the action space by dividing the image space into equal size patches

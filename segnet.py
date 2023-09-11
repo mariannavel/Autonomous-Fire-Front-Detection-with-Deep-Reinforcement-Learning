@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 def dice_coefficient(predicted, target, smooth=1):
     """
@@ -13,6 +14,24 @@ def dice_coefficient(predicted, target, smooth=1):
         union = torch.sum(p) + torch.sum(t)
         dice[i] = (2. * intersection + smooth) / (union + smooth)
     return dice
+
+def IoU(predicted, target):
+    """
+    :return: Intersection over Union aka the Jaccard index
+    """
+    iou = torch.zeros(predicted.shape[0])
+    # Calculate the intersection and union of the two binary masks
+    for i, (p, t) in enumerate(zip(predicted, target)):
+        intersection = torch.sum(p * t)
+        union = torch.sum(p) + torch.sum(t)
+        iou[i] = intersection / union
+
+    # intersection = np.logical_and(predictions, targets)
+    # union = np.logical_or(predictions, targets)
+
+    # iou = np.sum(intersection) / np.sum(union)
+
+    return iou
 
 def compute_SegNet_reward(preds, targets, policy, device):
     """
