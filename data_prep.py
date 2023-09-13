@@ -12,7 +12,7 @@ from SegNet.utils import get_img_762bands, get_mask_arr
 from visualize import visualize_image
 from EDA import split_in_patches, count_fire_pixels, get_label
 
-NUM_SAMPLES = 1000 # I have memory error with more than 2000 data (cannot dump)
+NUM_SAMPLES = 2000 # I have memory error with more than 2000 data (cannot dump)
 
 def binarize_masks(M_LR_vec):
     """
@@ -107,7 +107,7 @@ def load_images_from_folder(folder, max_num):
             images[filename] = img
     return images
 
-def get_custom_labels(seg_masks):
+def make_custom_labels(seg_masks):
     """
     This function returns the labels of Policy Network as binary vectors,
     based on the percentage of fire pixels in each patch.
@@ -120,9 +120,9 @@ def get_custom_labels(seg_masks):
         num_fire_pixels = count_fire_pixels(patches)
         label_vec.append(get_label(num_fire_pixels))
 
-    # with open("data/agent_targets", "wb") as fp:
-    #     pickle.dump(label_vec, fp)
-    return label_vec
+    with open(f"data/{NUM_SAMPLES}/agent_targets", "wb") as fp:
+        pickle.dump(label_vec, fp)
+    # return label_vec
 
 def make_PN_SIG_dset(img_path, target_path, max_num, split_ratio):
     """
@@ -168,17 +168,17 @@ def make_PN_dset(img_path, target_path, max_num, split_ratio):
 
     split_and_save(np.asarray(images), np.asarray(labels), split_ratio=split_ratio)
 
-# masks = load_images_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
-# labels = make_img_labels(masks)
-# with open(f"data/agent_targets_{NUM_SAMPLES}", "wb") as fp:
-#     pickle.dump(labels, fp)
 
-# make_PN_SIG_dset(img_path="data/images100",
-#              target_path=f"data/voting_masks100",
+# seg_masks = load_images_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
+# make_custom_labels(seg_masks)
+#
+#
+# make_PN_SIG_dset(img_path="data/images6179",
+#              target_path=f"data/voting_masks6179",
 #              max_num=NUM_SAMPLES,
 #              split_ratio=0.15)
 
-# make_PN_dset(img_path="data/images100",
-#              target_path=f"data/agent_targets_100",
+# make_PN_dset(img_path="data/images6179",
+#              target_path=f"data/{NUM_SAMPLES}/agent_targets",
 #              max_num=NUM_SAMPLES,
 #              split_ratio=0.15)

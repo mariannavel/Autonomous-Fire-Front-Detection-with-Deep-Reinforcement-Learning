@@ -19,8 +19,8 @@ parser = argparse.ArgumentParser(description='Policy Network Pre-training')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--model', default='ResNet_Landsat8')
 parser.add_argument('--data_dir', default='data/', help='data directory')
-parser.add_argument('--config_dir', default='pretrainPN/', help='configuration directory (models, args, logs are saved here)')
-parser.add_argument('--batch_size', type=int, default=32, help='batch size')
+parser.add_argument('--cv_dir', default='pretrainPN/', help='configuration directory (models, args, logs are saved here)')
+parser.add_argument('--batch_size', type=int, default=64, help='batch size')
 parser.add_argument('--max_epochs', type=int, default=20, help='total epochs to run')
 parser.add_argument('--LR_size', type=int, default=16, help='Policy Network Image Size')
 parser.add_argument('--test_interval', type=int, default=1, help='Every how many epoch to test the model')
@@ -28,6 +28,8 @@ parser.add_argument('--ckpt_interval', type=int, default=10, help='Every how man
 args = parser.parse_args()
 
 utils.save_args(__file__, args)
+
+NUM_SAMPLES = 2000
 
 def label_wise_accuracy(pred, target):
     pred = (pred > 0.5).float()
@@ -132,23 +134,23 @@ def test(model, epoch):
             'accuracy': avg_accuracy,
             'F1-score': avg_f1
         }
-        torch.save(state, args.config_dir+'/checkpoints/PN_pretrain_E_%d_F1_%.3f' % (epoch, avg_f1))
+        torch.save(state, args.cv_dir+'/checkpoints/PN_pretrain_E_%d_F1_%.3f' % (epoch, avg_f1))
 
 if __name__ == "__main__":
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # Save the log values for tensorboard logger
-    if not os.path.exists(args.config_dir+'/logs'):
-        os.system('mkdir ' + args.config_dir+'/logs')
-    configure(args.config_dir+'/logs', flush_secs=5)
+    if not os.path.exists(args.cv_dir+'/logs'):
+        os.system('mkdir ' + args.cv_dir+'/logs')
+    configure(args.cv_dir+'/logs', flush_secs=5)
 
-    if not os.path.exists(args.config_dir+'/checkpoints'):
-        os.system('mkdir ' + args.config_dir+'/checkpoints')
+    if not os.path.exists(args.cv_dir+'/checkpoints'):
+        os.system('mkdir ' + args.cv_dir+'/checkpoints')
 
     # Load the images and targets
-    trainset = LandsatDataset(args.data_dir+'train_agent85.pkl')
-    testset = LandsatDataset(args.data_dir+'test_agent15.pkl')
+    trainset = LandsatDataset(args.data_dir+f'{NUM_SAMPLES}/train_agent.pkl')
+    testset = LandsatDataset(args.data_dir+f'{NUM_SAMPLES}/test_agent.pkl')
 
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     testloader = DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)

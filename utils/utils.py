@@ -13,8 +13,8 @@ from utils.custom_dataloader import CustomDatasetFromImages, LandsatDataset, Lan
 import matplotlib.pyplot as plt
 
 def save_args(__file__, args):
-    shutil.copy(os.path.basename(__file__), args.config_dir)
-    with open(args.config_dir+'/args.txt','w') as f:
+    shutil.copy(os.path.basename(__file__), args.cv_dir)
+    with open(args.cv_dir+'/args.txt','w') as f:
         f.write(str(args))
 
 def preprocess_inputs(LR_size, inputs, targets):
@@ -167,14 +167,11 @@ def get_dataset(model, root='data/'):
     # transform_train, transform_test = get_transforms(dset) # edw mporw na kanw resize tis eikones
 
     if dset=='Landsat8':
-        trainset = LandsatDataset(root + 'train1700.pkl')
-        testset = LandsatDataset(root + 'test301.pkl')
+        trainset = LandsatDataset(root + 'train.pkl')
+        testset = LandsatDataset(root + 'test.pkl')
     # elif dset=='C10':
     #     trainset = torchdata.CIFAR10(root=root, train=True, download=True, transform=transform_train)
     #     testset = torchdata.CIFAR10(root=root, train=False, download=True, transform=transform_test)
-    # elif dset=='C100':
-    #     trainset = torchdata.CIFAR100(root=root, train=True, download=True, transform=transform_train)
-    #     testset = torchdata.CIFAR100(root=root, train=False, download=True, transform=transform_test)
     # elif dset=='ImgNet':
     #     trainset = torchdata.ImageFolder(root+'/ImageNet/train/', transform_train)
     #     testset = torchdata.ImageFolder(root+'/ImageNet/test/', transform_test)
@@ -252,3 +249,17 @@ def save_logs(epoch, stats, mode="test"):
     log_value(f'{mode}_sparsity', stats["sparsity"], epoch)
     log_value(f'{mode}_variance', stats["variance"], epoch)
     # log_value(f'{mode}_unique_policies', len(stats["policy_set"]), epoch)
+
+def save_agent_model(epoch, args, agent, stats):
+
+    if not os.path.exists(args.cv_dir + '/checkpoints'):
+        os.system('mkdir ' + args.cv_dir + '/checkpoints')
+
+    agent_state_dict = agent.module.state_dict() if args.parallel else agent.state_dict()
+    state = {
+        'agent': agent_state_dict,
+        'epoch': epoch,
+        'reward': stats["return"],
+        'dice': stats["dice"]
+    }
+    torch.save(state, args.cv_dir + 'checkpoints/Policy_ckpt_E_%d_R_%.3f_%s' % (epoch, stats["return"], args.model[0:3]))
