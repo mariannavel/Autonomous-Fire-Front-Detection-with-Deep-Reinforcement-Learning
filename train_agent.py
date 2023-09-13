@@ -35,17 +35,17 @@ NUM_SAMPLES = 100
 
 import argparse
 parser = argparse.ArgumentParser(description='Policy Network Training')
-parser.add_argument('--lr', type=float, default=1e-3, help='learning rate') # DECREASED lr 0.01 --> 0.001
+parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--model', default='ResNet_Landsat8', help='R<depth>_<dataset> see utils.py for a list of configurations')
-parser.add_argument('--data_dir', default='data/1000/', help='data directory')
+parser.add_argument('--data_dir', default='data/100/', help='data directory')
 parser.add_argument('--load', default=None, help='checkpoint to load pretrained agent')
-parser.add_argument('--cv_dir', default='train_agent/1000', help='checkpoint directory (models and logs are saved here)')
+parser.add_argument('--cv_dir', default='train_agent/100/', help='checkpoint directory (models and logs are saved here)')
 parser.add_argument('--batch_size', type=int, default=32, help='batch size') # INCREASED batch size 8 --> 16 --> 32 --> 64 --(2K dset)--> SIGKILL
-parser.add_argument('--max_epochs', type=int, default=500, help='total epochs to run')
+parser.add_argument('--max_epochs', type=int, default=1000, help='total epochs to run')
 parser.add_argument('--parallel', action ='store_true', default=False, help='use multiple GPUs for training')
 parser.add_argument('--alpha', type=float, default=0.8, help='probability bounding factor')
 parser.add_argument('--LR_size', type=int, default=16, help='Policy Network Image Size')
-parser.add_argument('--test_interval', type=int, default=1, help='Every how many epoch to test the model')
+parser.add_argument('--test_interval', type=int, default=10, help='Every how many epoch to test the model')
 parser.add_argument('--ckpt_interval', type=int, default=100, help='Every how many epoch to save the model')
 args = parser.parse_args()
 
@@ -116,6 +116,7 @@ def train(epoch):
         rewards_baseline.append(reward_baseline.cpu())
         action_set.append(agent_actions.data.cpu())
         dice_coefs.append(dice.cpu())
+
         torch.cuda.empty_cache()
 
         # Save the final states (one epoch, 16 images)
@@ -124,20 +125,22 @@ def train(epoch):
             # plt.imsave("action_progress/Epoch" + str(epoch) + "_patches_dropped_" + dropped + ".jpg",
             #            maskedHR_sampled[0].permute(1, 2, 0).cpu().numpy())
 
-    E = {}  # stores the Expected Value of each statistic
-    E["return"], E["dice"], E["sparsity"], E["variance"] = utils.performance_stats(action_set, rewards, dice_coefs)
-    E["rewards_baseline"] = rewards_baseline
-    exp_return.append(E["return"])
-    t = time.time()-start_time
-    print('Train: %d | Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f | %.3f s'%(epoch, E["return"], E["dice"], E["sparsity"], E["variance"], t))
+    avg_reward, avg_dc, sparsity, variance = utils.save_performance_stats(action_set, rewards, dice_coefs, train_stats)
+    avg_rw_baseline = torch.cat(rewards_baseline, 0).mean()
+    train_stats["reward_baseline"].append(avg_rw_baseline)
 
-    utils.save_logs(epoch, E, mode="train")
+    t = time.time()-start_time
+    print('Train: %d | Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f | %.3f s'%(epoch, avg_reward,
+            avg_dc, sparsity, variance, t))
+
+    utils.log_value('train_baseline_reward', avg_rw_baseline, epoch)
+    utils.save_logs(epoch, avg_reward, avg_dc, sparsity, variance, mode="train")
 
 def test(epoch):
 
     # agent.eval() # flag: deactivate training (gradient update) mode
 
-    rewards, policies, dice_coef = [], [], []
+    rewards, action_set, dice_coef = [], [], []
     with torch.no_grad():
         for batch_idx, (inputs, targets) in tqdm.tqdm(enumerate(testloader), total=len(testloader), disable=True):
 
@@ -157,23 +160,24 @@ def test(epoch):
             masked_images = utils.get_agent_masked_image(inputs, actions, mappings, patch_size)
             preds = get_SegNet_prediction(masked_images.cpu(), pytorch_unet, device)
 
-        reward, dice = compute_SegNet_reward(preds.cpu(), targets, actions.data, device)
+            reward, dice = compute_SegNet_reward(preds.cpu(), targets, actions.data, device)
 
-        rewards.append(reward)
-        policies.append(actions.data)
-        dice_coef.append(dice)
-        torch.cuda.empty_cache()
+            rewards.append(reward)
+            action_set.append(actions.data)
+            dice_coef.append(dice)
 
-        # utils.save_masked_img_grid(epoch, batch_idx, inputs, "validation")
-    E = {} # stores the Expected Value of each statistic
-    E["return"], E["dice"], E["sparsity"], E["variance"] = utils.performance_stats(policies, rewards, dice_coef)
+            torch.cuda.empty_cache()
 
-    print('Test - Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f\n'%(E["return"], E["dice"], E["sparsity"], E["variance"]))
+    # utils.save_masked_img_grid(epoch, batch_idx, inputs, "validation")
 
-    utils.save_logs(epoch, E, mode="test")
+    avg_reward, avg_dc, sparsity, variance = utils.save_performance_stats(action_set, rewards, dice_coef, test_stats)
+
+    print('Test - Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f\n'%(avg_reward, avg_dc, sparsity, variance))
+
+    utils.save_logs(epoch, avg_reward, avg_dc, sparsity, variance, mode="test")
 
     if epoch % args.ckpt_interval == 0:
-        utils.save_agent_model(epoch, args, agent, E)
+        utils.save_agent_model(epoch, args, agent, test_stats)
 
 #--------------------------------------------------------------------------------------------------------#
 trainset = LandsatDataset(args.data_dir + 'train.pkl')
@@ -225,7 +229,10 @@ agent.to(device) # next(agent.parameters()).is_cuda
 
 optimizer = optim.Adam(agent.parameters(), lr=args.lr)
 
-exp_return = []
+# Store the Expected Value of each statistic for every epoch
+train_stats = {"return": [], "dice": [], "sparsity": [], "variance": [], "reward_baseline": []}
+test_stats = {"return": [], "dice": [], "sparsity": [], "variance": []}
+
 start_time = time.time()
 
 # trainset.num_examples > 1 (sto batch) -> BATCHNORM
@@ -234,14 +241,18 @@ for epoch in range(start_epoch, start_epoch+args.max_epochs):
     if epoch % args.test_interval == 0:
         test(epoch)
 
-print(f'Runtime (sec): {time.time()-start_time}')
+print('Runtime (min): %.2f' % ((time.time()-start_time)/60.))
 
-# Save the rewards
-with open(f"Reward_E_{args.max_epochs}_samples_{NUM_SAMPLES}", "wb") as fp:
-    pickle.dump(exp_return, fp)
+# Save the results
+with open(f"{args.cv_dir}train_stats_E_{args.max_epochs}_samples_{NUM_SAMPLES}", "wb") as fp:
+    pickle.dump(train_stats, fp)
 
+with open(f"{args.cv_dir}test_stats_E_{args.max_epochs}_samples_{NUM_SAMPLES}", "wb") as fp:
+    pickle.dump(test_stats, fp)
+
+# Plot the average return
 plt.figure()
-plt.semilogy(exp_return)
+plt.semilogy(train_stats["return"])
 plt.xlabel('Epochs')
 plt.title('Expected Return')
 plt.grid(linestyle=':', which='both')

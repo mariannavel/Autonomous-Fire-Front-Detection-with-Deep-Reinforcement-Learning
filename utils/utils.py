@@ -23,23 +23,30 @@ def preprocess_inputs(LR_size, inputs, targets):
     LR_inputs_agent = torch.nn.functional.interpolate(inputs.clone(), (LR_size, LR_size))
     return inputs, LR_inputs_agent, targets
 
-def performance_stats(actions, rewards, dice_coef):
-    # Print the performace metrics including the average reward, average number
-    # and variance of sampled num_patches, and number of unique actions
+def save_performance_stats(actions, rewards, dc, stats_dict):
+    """
+    Save all performance metrics from a single epoch in stats_dict.
+    :param actions: [list] the binary action set
+    :param rewards: [list] the rewards of each iteration
+    :param dc: [list] the dice coefficient of each iteration
+    :return stats to print
+    """
     actions = torch.cat(actions, 0)
-    rewards = torch.cat(rewards, 0)
-    dice_coefs = torch.cat(dice_coef, 0)
+    rewards = torch.cat(rewards, 0) # For each sample I get one value
+    dice_coefs = torch.cat(dc, 0)   # also
 
-    reward = rewards.mean()
-    dice_coef = dice_coefs.mean()
+    avg_reward = rewards.mean()
+    avg_dc = dice_coefs.mean() # we must not care about it during training (will be high at the beginning and it's normal because agent samples more patches)
 
     sparsity = actions.sum(1).mean() # average selected patches
     variance = actions.sum(1).std()
 
-    # action_set = [p.cpu().numpy().astype(np.int).astype(np.str) for p in actions]
-    # action_set = set([''.join(p) for p in action_set])
+    stats_dict["return"].append(avg_reward.item())
+    stats_dict["dice"].append(avg_dc.item())
+    stats_dict["sparsity"].append(sparsity.item())
+    stats_dict["variance"].append(variance.item())
 
-    return reward, dice_coef, sparsity, variance
+    return avg_reward, avg_dc, sparsity, variance
 
 def compute_reward(preds, targets, policy, penalty):
     # Reward function favors policies that drops patches only if the classifier
@@ -237,17 +244,14 @@ def save_masked_img_grid(epoch, batch_idx ,inputs_sample, mode):
     fig.savefig("action_progress/"+mode+"/Epoch" + str(epoch) +"_batch_"+ str(batch_idx+1) + ".jpg")
     plt.close("all")
 
-def save_logs(epoch, stats, mode="test"):
+def save_logs(epoch, avg_reward, avg_dc, sparsity, variance, mode="test"):
     """
-    :param stats: dictionary of statistics to save
     :param mode: train or test
     """
-    log_value(f'{mode}_dice', stats["dice"], epoch)
-    log_value(f'{mode}_reward', stats["return"], epoch)
-    if mode == "train":
-        log_value('train_baseline_reward', torch.cat(stats["rewards_baseline"], 0).mean(), epoch)
-    log_value(f'{mode}_sparsity', stats["sparsity"], epoch)
-    log_value(f'{mode}_variance', stats["variance"], epoch)
+    log_value(f'{mode}_dice', avg_dc, epoch)
+    log_value(f'{mode}_reward', avg_reward, epoch)
+    log_value(f'{mode}_sparsity', sparsity, epoch)
+    log_value(f'{mode}_variance', variance, epoch)
     # log_value(f'{mode}_unique_policies', len(stats["policy_set"]), epoch)
 
 def save_agent_model(epoch, args, agent, stats):
