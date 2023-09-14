@@ -1,11 +1,7 @@
-import torch
-import torch.utils.data as torchdata
-from utils import utils
 import matplotlib.pyplot as plt
 import numpy as np
-
-IMG_PATH = 'data/images/'
-MSK_PATH = 'data/voting_masks'
+from SegNet.utils import get_mask_arr, get_img_762bands
+import os
 
 MAX_PIXEL_VALUE = 65535 # used to normalize the image
 TH_FIRE = 0.25 # fire threshold
@@ -37,6 +33,7 @@ def visualize_images(images, masks, title="", savepath=""):
 
 def plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR, I_HR_patch, M_HR_patch):
     """
+    Plot image of initial .mat dataset through the pipeline.
         I_LR: low resolution image
         I_HR: high resolution image
         M_LR_map: LR image map (ground truth)
@@ -76,65 +73,15 @@ def plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR, I_HR_patch, M_HR_patch):
 
         plt.show()
 
+def plot_images3c_with_mask(img_path='data/images/', msk_path='data/voting_masks'):
 
-def visualize_masked_imgs(model):
-
-    trainset, testset = utils.get_dataset(model, 'data/')
-    trainloader = torchdata.DataLoader(trainset, batch_size=32, shuffle=True, num_workers=0)
-    testloader = torchdata.DataLoader(testset, batch_size=32, shuffle=False, num_workers=0)
-    _, _, agent = utils.get_model(model)
-
-    agent.eval().cuda()
-
-    mappings, img_size, patch_size = utils.action_space_model(model.split('_')[1])
-
-    ckpt_2stream = torch.load("cv/tmp/Landsat-8/F2Stream_ckpt_E_30_train_0.98_test_0.944_R_1.32E-01")
-    agent.load_state_dict(ckpt_2stream['agent'])
-
-    matches, rewards, policies = [], [], []
-    for batch_idx, (inputs, targets) in enumerate(testloader):
-
-        if batch_idx == 0:
-            print("labels:", targets)
-
-            if (model == 'R32_Landsat-8'):
-                inputs = inputs.float().permute(0, 3, 1, 2)
-
-            # Get the low resolution images for the agent and classifier
-            inputs_agent = inputs.clone().cuda()
-            inputs_agent = torch.nn.functional.interpolate(inputs_agent, (16, 16))
-            probs = torch.sigmoid(agent.forward(inputs_agent, model.split('_')[1], 'lr'))
-
-            # Sample Test time Policy from Agent's Output
-            policy = probs.data.clone()
-            policy[policy < 0.5] = 0.0
-            policy[policy >= 0.5] = 1.0
-
-            # Get the Agent Determined Images
-            # inputs = torch.nn.functional.interpolate(inputs.clone(), (64, 64))
-            masked_img = utils.agent_chosen_input(inputs, policy, mappings, patch_size)
-            for i in range(10):
-                # plt.figure(figsize=(2.5, 1.5))
-                _, ax = plt.subplots(1, 2)
-                ax[0].imshow(inputs[i+5].permute(1, 2, 0))
-                ax[1].imshow(masked_img[i+5].permute(1, 2, 0).cpu())
-                plt.subplot(1, 2, 1)
-                plt.title("input")
-                plt.subplot(1, 2, 2)
-                plt.title("masked input")
-                plt.savefig('out' + str(i) + '.png')
-                # plt.show()
-            break
-
-def visualize_image3c_with_mask():
-    # TA KOKKINA EINAI STIN PRETRAIN
-    img_filelist = sorted(os.listdir(IMG_PATH))
-    msk_filelist = sorted(os.listdir(MSK_PATH))
+    img_filelist = sorted(os.listdir(img_path))
+    msk_filelist = sorted(os.listdir(msk_path))
     for fn_img, fn_mask in zip(img_filelist, msk_filelist):
 
-        img = os.path.join(IMG_PATH, fn_img)
+        img = os.path.join(img_path, fn_img)
         img3c = get_img_762bands(img) # 3 channels
-        mask = get_mask_arr(os.path.join(MSK_PATH, fn_mask))
+        mask = get_mask_arr(os.path.join(msk_path, fn_mask))
 
         plt.subplot(1, 2, 1)
         plt.imshow(img3c)
@@ -146,13 +93,21 @@ def visualize_image3c_with_mask():
 
         plt.show()
 
-def baseline_vs_agent_sampling(orig, env1, env2):
+def plot_baseline_vs_agent(image, env1, env2):
+    """
+    Plot original image with 1. masked resulting from baseline policy
+                             2. masked resulting from agent policy
+    :param image: [tensor of 1 x dim x dim]
+    :param env1: [tensor of 1 x dim x dim] the baseline
+    :param env2: [tensor of 1 x dim x dim] the agent
+    :return:
+    """
+    image = image.float().permute(2, 1, 0) # 2, 1 ??
     env1 = env1.float().permute(2, 1, 0)
     env2 = env2.float().permute(2, 1, 0)
-    orig = orig.float().permute(2, 1, 0)
 
     plt.subplot(1, 3, 1)
-    plt.imshow(orig.detach().numpy())
+    plt.imshow(image.detach().numpy())
     plt.title('Original image')
 
     plt.subplot(1, 3, 2)

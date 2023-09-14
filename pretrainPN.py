@@ -1,5 +1,11 @@
 """
-This file trains the Policy Network standalone with custom targets (saved as binary vectors .
+This file trains the Policy Network standalone with custom targets (saved as binary vectors) .
+To Run on Different Benchmarks:
+    python pretrainPN.py --model ResNet_Landsat8, ResNet18_Landsat8
+       --lr 1e-4
+       --cv_dir checkpoint directory
+       --batch_size 1048 (Higher is better)
+       --LR_size 8, 56 (Depends on the dataset)
 """
 import os
 import torch
@@ -13,13 +19,14 @@ from tensorboard_logger import configure, log_value
 from visualize import visualize_image
 from sklearn.metrics import f1_score
 import numpy as np
+import pickle
 
 import argparse
 parser = argparse.ArgumentParser(description='Policy Network Pre-training')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--model', default='ResNet_Landsat8')
 parser.add_argument('--data_dir', default='data/', help='data directory')
-parser.add_argument('--cv_dir', default='pretrainPN/', help='configuration directory (models, args, logs are saved here)')
+parser.add_argument('--cv_dir', default='pretrainPN/', help='configuration directory (models and logs are saved here)')
 parser.add_argument('--batch_size', type=int, default=64, help='batch size')
 parser.add_argument('--max_epochs', type=int, default=20, help='total epochs to run')
 parser.add_argument('--LR_size', type=int, default=16, help='Policy Network Image Size')
@@ -29,7 +36,18 @@ args = parser.parse_args()
 
 utils.save_args(__file__, args)
 
-NUM_SAMPLES = 2000
+NUM_SAMPLES = 100
+
+def save_stats(losses, accuracies, f1_scores, stats_dict):
+
+    avg_loss = sum(losses) / len(losses)
+    avg_accuracy = sum(accuracies) / len(accuracies)
+    avg_f1 = sum(f1_scores) / len(f1_scores)
+    stats_dict["return"].append(avg_loss.item())
+    stats_dict["dice"].append(avg_accuracy.item())
+    stats_dict["sparsity"].append(avg_f1.item())
+
+    return avg_loss, avg_accuracy, avg_f1
 
 def label_wise_accuracy(pred, target):
     pred = (pred > 0.5).float()
@@ -49,7 +67,7 @@ def train(model, epoch):
         inputs = inputs.float().permute(0, 3, 1, 2)
         inputs_agent = torch.nn.functional.interpolate(inputs.clone(), (args.LR_size, args.LR_size))
 
-        # Run LR image through Policy Network
+        # Input LR image through the model
         logits = model.forward(inputs_agent, activation=False)
 
         preds = logits.type(torch.DoubleTensor).to(device)
@@ -59,10 +77,10 @@ def train(model, epoch):
         loss.backward()
         optimizer.step()
 
+        # Compute metrics
         with torch.no_grad():
             preds = torch.sigmoid(preds)
             # acc = torch.mean(label_wise_accuracy(preds, targets)) # works same
-
             preds[preds < 0.5] = 0.0
             preds[preds >= 0.5] = 1.0
             matches = (preds == targets).int()
@@ -77,14 +95,11 @@ def train(model, epoch):
         accuracies.append(accuracy.item())
         f1_scores.append(weighted_f1)
 
-    avg_loss = sum(losses)/len(losses)
-    avg_accuracy = sum(accuracies)/len(accuracies)
-    avg_f1 = sum(f1_scores)/len(f1_scores)
+    avg_loss, avg_accuracy, avg_f1 = save_stats(losses, accuracies, f1_scores, train_stats)
     log_value(f'train_loss', avg_loss, epoch)
     log_value(f'train_accuracy', avg_accuracy, epoch)
     log_value(f'train_F1_score', avg_f1, epoch)
     print(f"Epoch %d | loss: %.4f | accuracy: %.4f | F1-score: %.4f" % (epoch, avg_loss, avg_accuracy, avg_f1))
-
 
 def test(model, epoch):
 
@@ -119,9 +134,7 @@ def test(model, epoch):
         accuracies.append(accuracy.item())
         f1_scores.append(weighted_f1)
 
-    avg_loss = sum(losses) / len(losses)
-    avg_accuracy = sum(accuracies) / len(accuracies)
-    avg_f1 = sum(f1_scores)/len(f1_scores)
+    avg_loss, avg_accuracy, avg_f1 = save_stats(losses, accuracies, f1_scores, test_stats)
     log_value(f'val_loss', avg_loss, epoch)
     log_value(f'val_accuracy', avg_accuracy, epoch)
     log_value(f'val_F1_score', avg_f1, epoch)
@@ -162,6 +175,9 @@ if __name__ == "__main__":
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
+    train_stats = {"loss": [], "accuracy": [], "F-score": []}
+    test_stats = {"loss": [], "accuracy": [], "F-score": []}
+
     start_epoch = 1
 
     print('--- Policy Network Pre-training ---')
@@ -170,3 +186,10 @@ if __name__ == "__main__":
         train(model, epoch)
         if epoch % args.test_interval == 0:
             test(model, epoch)
+
+    # Save the results
+    with open(f"{args.cv_dir}train_stats_E_{args.max_epochs}_samples_{NUM_SAMPLES}", "wb") as fp:
+        pickle.dump(train_stats, fp)
+
+    with open(f"{args.cv_dir}test_stats_E_{args.max_epochs}_samples_{NUM_SAMPLES}", "wb") as fp:
+        pickle.dump(test_stats, fp)

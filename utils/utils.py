@@ -23,6 +23,18 @@ def preprocess_inputs(LR_size, inputs, targets):
     LR_inputs_agent = torch.nn.functional.interpolate(inputs.clone(), (LR_size, LR_size))
     return inputs, LR_inputs_agent, targets
 
+def binarize_masks(M_LR_vec):
+    """
+    Called when training PatchDrop on Landsat-8 with classifier.
+    :param M_LR_vec: 118 x 17 ndarray
+    :return: boolean vector with value True corresponding to images with fire
+    """
+    # the last column indicates whether there is no patch to sample
+    # 1 for entries that have no fire
+    last_col = M_LR_vec[:,-1]
+    # I need to take the complement of the last column
+    return [not val for val in last_col]
+
 def save_performance_stats(actions, rewards, dc, stats_dict):
     """
     Save all performance metrics from a single epoch in stats_dict.
@@ -230,6 +242,11 @@ def get_model(model):
 
     return agent # rnet_hr, rnet_lr,
 
+def save_image(img, path):
+    plt.imshow(img)
+    plt.axis(False)
+    plt.savefig(path)
+
 def save_masked_img_grid(epoch, batch_idx ,inputs_sample, mode):
     # patches_dropped = []
     # for i in range(len(agent_actions)):
@@ -255,9 +272,6 @@ def save_logs(epoch, avg_reward, avg_dc, sparsity, variance, mode="test"):
     # log_value(f'{mode}_unique_policies', len(stats["policy_set"]), epoch)
 
 def save_agent_model(epoch, args, agent, stats):
-
-    if not os.path.exists(args.cv_dir + '/checkpoints'):
-        os.system('mkdir ' + args.cv_dir + '/checkpoints')
 
     agent_state_dict = agent.module.state_dict() if args.parallel else agent.state_dict()
     state = {

@@ -1,10 +1,10 @@
 """
 This file trains the policy network using the U-Net architecture
 as a policy evaluation step.
-How to Run on Different Benchmarks:
+To Run on Different Benchmarks:
     python train_agent.py --model ResNet_Landsat8, ResNet18_Landsat8 CNN_Landsat8
        --lr 1e-4
-       --cv_dir checkpoint directory
+       --cv_dir configuration directory
        --batch_size 1048 (Higher is better)
        --LR_size 8, 56 (Depends on the dataset)
 """
@@ -39,7 +39,7 @@ parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--model', default='ResNet_Landsat8', help='R<depth>_<dataset> see utils.py for a list of configurations')
 parser.add_argument('--data_dir', default='data/100/', help='data directory')
 parser.add_argument('--load', default=None, help='checkpoint to load pretrained agent')
-parser.add_argument('--cv_dir', default='train_agent/100/', help='checkpoint directory (models and logs are saved here)')
+parser.add_argument('--cv_dir', default='train_agent/100/', help='configuration directory (models and logs are saved here)')
 parser.add_argument('--batch_size', type=int, default=32, help='batch size') # INCREASED batch size 8 --> 16 --> 32 --> 64 --(2K dset)--> SIGKILL
 parser.add_argument('--max_epochs', type=int, default=1000, help='total epochs to run')
 parser.add_argument('--parallel', action ='store_true', default=False, help='use multiple GPUs for training')
@@ -210,6 +210,9 @@ pytorch_unet.load_state_dict(torch.load(CKPT_UNET))
 pytorch_unet.eval() # UNet must be on cpu, else CUDA out of memory
 print('U-Net weights loaded')
 # print(" PyTorch:", pytorch_unet.down1.conv_block[0].weight.shape)
+
+if not os.path.exists(args.cv_dir + '/checkpoints'):
+    os.system('mkdir ' + args.cv_dir + '/checkpoints')
 
 start_epoch = 1
 # Load the Policy Network (if checkpoint exists)

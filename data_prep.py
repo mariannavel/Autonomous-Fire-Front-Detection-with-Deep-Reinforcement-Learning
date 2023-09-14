@@ -10,21 +10,8 @@ import matplotlib.pyplot as plt
 import os
 from SegNet.utils import get_img_762bands, get_mask_arr
 from visualize import visualize_image
-from EDA import split_in_patches, count_fire_pixels, get_label
 
 NUM_SAMPLES = 2000 # I have memory error with more than 2000 data (cannot dump)
-
-def binarize_masks(M_LR_vec):
-    """
-    Called when training PatchDrop on Landsat-8 with classifier.
-    :param M_LR_vec: 118 x 17 ndarray
-    :return: boolean vector with value True corresponding to images with fire
-    """
-    # the last column indicates whether there is no patch to sample
-    # 1 for entries that have no fire
-    last_col = M_LR_vec[:,-1]
-    # I need to take the complement of the last column
-    return [not val for val in last_col]
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
     """
@@ -55,11 +42,6 @@ def load_mat_data(data_dir = "data/Landsat-8/"):
     I_HR_patch=I_HR_patch/I_HR_patch.max()
 
     # plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR_vec, I_HR_patch, M_HR_patch)
-
-def save_image(img, path):
-    plt.imshow(img)
-    plt.axis(False)
-    plt.savefig(path)
 
 def train_test_split(data, labels, test_size):
     """
@@ -106,23 +88,6 @@ def load_images_from_folder(folder, max_num):
         if img is not None:
             images[filename] = img
     return images
-
-def make_custom_labels(seg_masks):
-    """
-    This function returns the labels of Policy Network as binary vectors,
-    based on the percentage of fire pixels in each patch.
-
-    :param seg_masks: the binary segmentation masks (returned by EDA.load_images_from_folder("data/voting_masks100"))
-    """
-    label_vec = []
-    for mask_key in seg_masks:
-        patches = split_in_patches(seg_masks[mask_key]) # list of 16 patches
-        num_fire_pixels = count_fire_pixels(patches)
-        label_vec.append(get_label(num_fire_pixels))
-
-    with open(f"data/{NUM_SAMPLES}/agent_targets", "wb") as fp:
-        pickle.dump(label_vec, fp)
-    # return label_vec
 
 def make_PN_SIG_dset(img_path, target_path, max_num, split_ratio):
     """
@@ -171,7 +136,6 @@ def make_PN_dset(img_path, target_path, max_num, split_ratio):
 
 # seg_masks = load_images_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
 # make_custom_labels(seg_masks)
-#
 #
 # make_PN_SIG_dset(img_path="data/images6179",
 #              target_path=f"data/voting_masks6179",
