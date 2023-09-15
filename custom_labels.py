@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 from utils.utils import action_space_model
 import pickle
 from data_prep import load_images_from_folder
+import os
 
-NUM_SAMPLES = 100
+NUM_SAMPLES = 1000
 
 def plot_pixl_hist(distr, scale="linear"):
     """
@@ -77,7 +78,7 @@ def get_label(num_fire_pixels, patch_size=64, fire_thres=0.05):
             label[i] = 0
     return label
 
-def make_custom_labels(seg_masks, savepath=f"data/custom_targets"):
+def make_custom_labels(seg_masks, fire_thres, savepath=f"data/custom_targets"):
     """
     This function returns the labels of Policy Network as binary vectors,
     based on the percentage of fire pixels in each patch.
@@ -88,14 +89,17 @@ def make_custom_labels(seg_masks, savepath=f"data/custom_targets"):
     for mask_key in seg_masks:
         patches = split_in_patches(seg_masks[mask_key]) # list of 16 patches
         num_fire_pixels = count_fire_pixels(patches)
-        label_vec.append(get_label(num_fire_pixels))
+        label_vec.append(get_label(num_fire_pixels, fire_thres=fire_thres))
 
-    with open(savepath, "wb") as fp:
+    with open(savepath+f"thres{fire_thres}", "wb") as fp:
         pickle.dump(label_vec, fp)
     # return label_vec
 
 if __name__ == "__main__":
-    seg_masks = load_images_from_folder("data/voting_masks100", max_num=NUM_SAMPLES)
-    fire_thresholds = (0.01, 0.05, 0.1, 0.2, 0.3, 0.5)
+    seg_masks = load_images_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
+    fire_thresholds = (0.02, 0.03, 0.04)
     for thres in fire_thresholds:
-        make_custom_labels(seg_masks, savepath=f"pretrainPN/threshold_experiment/custom_targets/targets{thres}")
+        savepath = f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/custom_targets/"
+        if not os.path.exists(savepath):
+            os.system('mkdir ' + savepath)
+        make_custom_labels(seg_masks, thres, savepath=savepath)

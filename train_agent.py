@@ -172,7 +172,7 @@ def test(epoch):
 
     avg_reward, avg_dc, sparsity, variance = utils.save_performance_stats(action_set, rewards, dice_coef, test_stats)
 
-    print('Test - Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f\n'%(avg_reward, avg_dc, sparsity, variance))
+    print('Test | Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f\n'%(avg_reward, avg_dc, sparsity, variance))
 
     utils.save_logs(epoch, avg_reward, avg_dc, sparsity, variance, mode="test")
 

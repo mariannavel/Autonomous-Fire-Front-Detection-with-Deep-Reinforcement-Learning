@@ -7,7 +7,7 @@ from segnet import *
 from visualize import visualize_image, visualize_images
 
 LR_size = 16 # PN input dims
-NUM_SAMPLES = 2000
+NUM_SAMPLES = 1000
 
 def inference(model, images, mappings, patch_size):
     """ Get the agent masked images from input,
@@ -100,13 +100,15 @@ def compute_metrics(preds, targets):
 if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+    thresval = 0.04
+
     # Load images on which the policy network was NOT trained
-    images, _ = load_images_PN(datapath=f'data/{NUM_SAMPLES}/test_agent.pkl')
+    images, _ = load_images_PN(datapath=f'pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thresval}/data/test.pkl')
 
     # Feed them to PN and save the produced masks
     masked_images = get_model_results(images,
                     model='ResNet_Landsat8',
-                    ckpt_path="pretrainPN/checkpoints/PN_pretrain_E_20_F1_0.000",
+                    ckpt_path=f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thresval}/checkpoints/PN_pretrain_E_20_F1_0.000",
                     device=device,
                     mode="Test")
 
@@ -117,11 +119,11 @@ if __name__ == "__main__":
     # load U-Net
     unet = get_model_pytorch(model_name='unet', n_filters=16, n_channels=3)
     # load weights
-    unet.load_state_dict(torch.load('cv/tmp/Landsat-8/unet/pytorch_unet.pt'))
+    unet.load_state_dict(torch.load('train_agent/Landsat-8/unet/pytorch_unet.pt'))
     unet.eval()
 
     # Give masked images to U-Net and get their segment. mask
-    batch_size = 64
+    batch_size = 32
     masked_batches = [masked_images[i:i + batch_size] for i in range(0, len(masked_images), batch_size)]
     preds = [] # compute in batches because of memory limitations
     for batch in masked_batches:

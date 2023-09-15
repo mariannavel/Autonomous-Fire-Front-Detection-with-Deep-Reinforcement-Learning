@@ -20,32 +20,30 @@ from visualize import visualize_image
 from sklearn.metrics import f1_score
 import numpy as np
 import pickle
-
 import argparse
+
+NUM_SAMPLES = 1000
+
 parser = argparse.ArgumentParser(description='Policy Network Pre-training')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--model', default='ResNet_Landsat8')
-parser.add_argument('--data_dir', default='data/', help='data directory')
-parser.add_argument('--cv_dir', default='pretrainPN/', help='configuration directory (models and logs are saved here)')
+parser.add_argument('--data_dir', default=f'pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres0.04/data/', help='data directory')
+parser.add_argument('--cv_dir', default=f'pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres0.04/', help='configuration directory (models and logs are saved here)')
 parser.add_argument('--batch_size', type=int, default=64, help='batch size')
 parser.add_argument('--max_epochs', type=int, default=20, help='total epochs to run')
 parser.add_argument('--LR_size', type=int, default=16, help='Policy Network Image Size')
 parser.add_argument('--test_interval', type=int, default=1, help='Every how many epoch to test the model')
-parser.add_argument('--ckpt_interval', type=int, default=10, help='Every how many epoch to save the model')
+parser.add_argument('--ckpt_interval', type=int, default=20, help='Every how many epoch to save the model')
 args = parser.parse_args()
-
-utils.save_args(__file__, args)
-
-NUM_SAMPLES = 100
 
 def save_stats(losses, accuracies, f1_scores, stats_dict):
 
     avg_loss = sum(losses) / len(losses)
     avg_accuracy = sum(accuracies) / len(accuracies)
     avg_f1 = sum(f1_scores) / len(f1_scores)
-    stats_dict["return"].append(avg_loss.item())
-    stats_dict["dice"].append(avg_accuracy.item())
-    stats_dict["sparsity"].append(avg_f1.item())
+    stats_dict["loss"].append(avg_loss)
+    stats_dict["accuracy"].append(avg_accuracy)
+    stats_dict["F-score"].append(avg_f1)
 
     return avg_loss, avg_accuracy, avg_f1
 
@@ -99,7 +97,7 @@ def train(model, epoch):
     log_value(f'train_loss', avg_loss, epoch)
     log_value(f'train_accuracy', avg_accuracy, epoch)
     log_value(f'train_F1_score', avg_f1, epoch)
-    print(f"Epoch %d | loss: %.4f | accuracy: %.4f | F1-score: %.4f" % (epoch, avg_loss, avg_accuracy, avg_f1))
+    print(f"Train: %d | loss: %.4f | accuracy: %.4f | F1-score: %.4f" % (epoch, avg_loss, avg_accuracy, avg_f1))
 
 def test(model, epoch):
 
@@ -151,19 +149,21 @@ def test(model, epoch):
 
 if __name__ == "__main__":
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if not os.path.exists(args.cv_dir+'/checkpoints'):
+        os.makedirs(args.cv_dir+'/checkpoints')
 
     # Save the log values for tensorboard logger
     if not os.path.exists(args.cv_dir+'/logs'):
-        os.system('mkdir ' + args.cv_dir+'/logs')
+        os.makedirs(args.cv_dir+'/logs')
     configure(args.cv_dir+'/logs', flush_secs=5)
 
-    if not os.path.exists(args.cv_dir+'/checkpoints'):
-        os.system('mkdir ' + args.cv_dir+'/checkpoints')
+    utils.save_args(__file__, args)
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # Load the images and targets
-    trainset = LandsatDataset(args.data_dir+f'{NUM_SAMPLES}/train_agent.pkl')
-    testset = LandsatDataset(args.data_dir+f'{NUM_SAMPLES}/test_agent.pkl')
+    trainset = LandsatDataset(args.data_dir+f'train.pkl')
+    testset = LandsatDataset(args.data_dir+f'test.pkl')
 
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     testloader = DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)
@@ -188,8 +188,8 @@ if __name__ == "__main__":
             test(model, epoch)
 
     # Save the results
-    with open(f"{args.cv_dir}train_stats_E_{args.max_epochs}_samples_{NUM_SAMPLES}", "wb") as fp:
+    with open(f"{args.cv_dir}train_stats_E{args.max_epochs}", "wb") as fp:
         pickle.dump(train_stats, fp)
 
-    with open(f"{args.cv_dir}test_stats_E_{args.max_epochs}_samples_{NUM_SAMPLES}", "wb") as fp:
+    with open(f"{args.cv_dir}test_stats_E{args.max_epochs}", "wb") as fp:
         pickle.dump(test_stats, fp)

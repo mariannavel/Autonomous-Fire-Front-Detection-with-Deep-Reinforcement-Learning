@@ -11,7 +11,7 @@ import os
 from SegNet.utils import get_img_762bands, get_mask_arr
 from visualize import visualize_image
 
-NUM_SAMPLES = 2000 # I have memory error with more than 2000 data (cannot dump)
+NUM_SAMPLES = 1000 # I have memory error with more than 2000 data (cannot dump)
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
     """
@@ -65,19 +65,19 @@ def train_test_split(data, labels, test_size):
 
     return X_train, X_test, y_train, y_test
 
-def split_and_save(data, labels, data_dir = "data/", split_ratio=0.2):
+def split_and_save(data, labels, savedir="data/", split_ratio=0.2):
     """
     Split data to train-test set and save them to given directory.
     :param data: HR images
-    :param data_dir: path to save the split data
+    :param savedir: path to save the split data
     """
     X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=split_ratio)
     trainset = {"data": X_train, "targets": y_train}
     testset = {"data": X_test, "targets": y_test}
 
-    with open(data_dir + 'train.pkl', 'wb') as f:
+    with open(savedir + 'train.pkl', 'wb') as f:
         pickle.dump(trainset, f)
-    with open(data_dir + 'test.pkl', 'wb') as f:
+    with open(savedir + 'test.pkl', 'wb') as f:
         pickle.dump(testset, f)
 
 def load_images_from_folder(folder, max_num):
@@ -110,39 +110,45 @@ def make_PN_SIG_dset(img_path, target_path, max_num, split_ratio):
 
     split_and_save(np.asarray(images), np.asarray(masks), split_ratio=split_ratio)
 
-def make_PN_dset(img_path, target_path, max_num, split_ratio):
+def make_PN_dset(img_path, targets_path, savedir, max_num, split_ratio):
     """
     Takes the images path and the PN targets' path and saves them as train-test set
     for the training of Policy Network standalone.
     :param img_path: the path of the dataset images
-    :param target_path: the path of the binary vector targets of PN
+    :param targets_path: the path of the binary vector custom targets
     """
 
     images = []
 
-    with open(target_path, "rb") as fp:
+    with open(targets_path, "rb") as fp:
         labels = pickle.load(fp) # list of 100 vectors (lists)
 
     for i, fn_img in enumerate(sorted(os.listdir(img_path))):
         if i == max_num: break
         img3c = get_img_762bands(os.path.join(img_path, fn_img))  # give the image path
         # label = labels[fn_img.replace('RT_', 'RT_Voting_')]
-        # visualize_image(img3c)
         images.append(img3c)
-        print(f"saved {fn_img}")
+        # print(f"saved {fn_img}")
 
-    split_and_save(np.asarray(images), np.asarray(labels), split_ratio=split_ratio)
+    split_and_save(np.asarray(images), np.asarray(labels), savedir, split_ratio=split_ratio)
 
 
 # seg_masks = load_images_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
-# make_custom_labels(seg_masks)
 #
 # make_PN_SIG_dset(img_path="data/images6179",
 #              target_path=f"data/voting_masks6179",
 #              max_num=NUM_SAMPLES,
 #              split_ratio=0.15)
 
-# make_PN_dset(img_path="data/images6179",
-#              target_path=f"data/{NUM_SAMPLES}/agent_targets",
-#              max_num=NUM_SAMPLES,
-#              split_ratio=0.15)
+fire_thresholds = (0.02, 0.03, 0.04)
+for thres in fire_thresholds:
+
+    savedir = f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thres}/data/"
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+
+    make_PN_dset(img_path="data/images6179",
+             targets_path=f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/custom_targets/thres{thres}",
+             savedir=savedir,
+             max_num=NUM_SAMPLES,
+             split_ratio=0.15)
