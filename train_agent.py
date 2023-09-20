@@ -31,15 +31,15 @@ from segnet import *
 cudnn.benchmark = True
 
 CKPT_UNET = 'train_agent/Landsat-8/unet/pytorch_unet.pt'
-NUM_SAMPLES = 100
+NUM_SAMPLES = 1000
 
 import argparse
 parser = argparse.ArgumentParser(description='Policy Network Training')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--model', default='ResNet_Landsat8', help='R<depth>_<dataset> see utils.py for a list of configurations')
-parser.add_argument('--data_dir', default='data/100/', help='data directory')
+parser.add_argument('--data_dir', default='data/1000/', help='data directory')
 parser.add_argument('--load', default=None, help='checkpoint to load pretrained agent')
-parser.add_argument('--cv_dir', default='train_agent/100/', help='configuration directory (models and logs are saved here)')
+parser.add_argument('--cv_dir', default='train_agent/1000/', help='configuration directory (models and logs are saved here)')
 parser.add_argument('--batch_size', type=int, default=32, help='batch size') # INCREASED batch size 8 --> 16 --> 32 --> 64 --(2K dset)--> SIGKILL
 parser.add_argument('--max_epochs', type=int, default=1000, help='total epochs to run')
 parser.add_argument('--parallel', action ='store_true', default=False, help='use multiple GPUs for training')
@@ -177,7 +177,7 @@ def test(epoch):
     utils.save_logs(epoch, avg_reward, avg_dc, sparsity, variance, mode="test")
 
     if epoch % args.ckpt_interval == 0:
-        utils.save_agent_model(epoch, args, agent, test_stats)
+        utils.save_agent_model(epoch, args, agent, avg_reward, avg_dc)
 
 #--------------------------------------------------------------------------------------------------------#
 trainset = LandsatDataset(args.data_dir + 'train.pkl')
