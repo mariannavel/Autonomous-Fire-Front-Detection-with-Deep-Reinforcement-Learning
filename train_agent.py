@@ -49,8 +49,8 @@ parser.add_argument('--test_interval', type=int, default=10, help='Every how man
 parser.add_argument('--ckpt_interval', type=int, default=100, help='Every how many epoch to save the model')
 args = parser.parse_args()
 
-if not os.path.exists(args.cv_dir):
-    os.system('mkdir ' + args.cv_dir)
+if not os.path.exists(args.cv_dir + '/checkpoints'):
+    os.makedirs(args.cv_dir + '/checkpoints')
 utils.save_args(__file__, args)
 
 def train(epoch):
@@ -210,9 +210,6 @@ pytorch_unet.load_state_dict(torch.load(CKPT_UNET))
 pytorch_unet.eval() # UNet must be on cpu, else CUDA out of memory
 print('U-Net weights loaded')
 # print(" PyTorch:", pytorch_unet.down1.conv_block[0].weight.shape)
-
-if not os.path.exists(args.cv_dir + '/checkpoints'):
-    os.system('mkdir ' + args.cv_dir + '/checkpoints')
 
 start_epoch = 1
 # Load the Policy Network (if checkpoint exists)
