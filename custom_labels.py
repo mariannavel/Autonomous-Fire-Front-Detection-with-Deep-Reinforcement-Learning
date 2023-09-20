@@ -6,7 +6,7 @@ import pickle
 from data_prep import load_images_from_folder
 import os
 
-NUM_SAMPLES = 1000
+NUM_SAMPLES = 2000
 
 def plot_pixl_hist(distr, scale="linear"):
     """
@@ -97,9 +97,9 @@ def make_custom_labels(seg_masks, fire_thres, savepath=f"data/custom_targets"):
 
 if __name__ == "__main__":
     seg_masks = load_images_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
-    fire_thresholds = (0.02, 0.03, 0.04)
+    fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2)
     for thres in fire_thresholds:
         savepath = f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/custom_targets/"
         if not os.path.exists(savepath):
-            os.system('mkdir ' + savepath)
+            os.makedirs(savepath)
         make_custom_labels(seg_masks, thres, savepath=savepath)

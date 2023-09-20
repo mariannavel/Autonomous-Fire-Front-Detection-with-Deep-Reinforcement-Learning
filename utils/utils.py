@@ -271,13 +271,13 @@ def save_logs(epoch, avg_reward, avg_dc, sparsity, variance, mode="test"):
     log_value(f'{mode}_variance', variance, epoch)
     # log_value(f'{mode}_unique_policies', len(stats["policy_set"]), epoch)
 
-def save_agent_model(epoch, args, agent, stats):
+def save_agent_model(epoch, args, agent, reward, dice):
 
     agent_state_dict = agent.module.state_dict() if args.parallel else agent.state_dict()
     state = {
         'agent': agent_state_dict,
         'epoch': epoch,
-        'reward': stats["return"],
-        'dice': stats["dice"]
+        'reward': reward,
+        'dice': dice
     }
-    torch.save(state, args.cv_dir + 'checkpoints/Policy_ckpt_E_%d_R_%.3f_%s' % (epoch, stats["return"], args.model[0:3]))
+    torch.save(state, args.cv_dir + 'checkpoints/Policy_ckpt_E_%d_R_%.3f_%s' % (epoch, reward, args.model[0:3]))

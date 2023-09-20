@@ -11,7 +11,7 @@ import os
 from SegNet.utils import get_img_762bands, get_mask_arr
 from visualize import visualize_image
 
-NUM_SAMPLES = 1000 # I have memory error with more than 2000 data (cannot dump)
+NUM_SAMPLES = 2000 # I have memory error with more than 2000 data (cannot dump)
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
     """
@@ -140,7 +140,7 @@ def make_PN_dset(img_path, targets_path, savedir, max_num, split_ratio):
 #              max_num=NUM_SAMPLES,
 #              split_ratio=0.15)
 
-fire_thresholds = (0.02, 0.03, 0.04)
+fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2)
 for thres in fire_thresholds:
 
     savedir = f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thres}/data/"
