@@ -4,8 +4,8 @@ import os
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-from SegNet.unet_models_keras import get_model_keras
-from SegNet.unet_models_pytorch import get_model_pytorch
+from unet.unet_models_keras import get_model_keras
+from unet.unet_models_pytorch import get_model_pytorch
 
 MAX_PIXEL_VALUE = 65535 # Max. pixel value, used to normalize the image
 IMAGE_SIZE = (256, 256)

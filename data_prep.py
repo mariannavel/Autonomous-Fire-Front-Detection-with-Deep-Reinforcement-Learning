@@ -6,10 +6,8 @@ import numpy as np
 import pickle
 from scipy.io import loadmat
 # from sklearn.model_selection import train_test_split
-import matplotlib.pyplot as plt
 import os
-from SegNet.utils import get_img_762bands, get_mask_arr
-from visualize import visualize_image
+from unet.utils import get_img_762bands, get_mask_arr
 
 NUM_SAMPLES = 2000 # I have memory error with more than 2000 data (cannot dump)
 
@@ -80,7 +78,7 @@ def split_and_save(data, labels, savedir="data/", split_ratio=0.2):
     with open(savedir + 'test.pkl', 'wb') as f:
         pickle.dump(testset, f)
 
-def load_images_from_folder(folder, max_num):
+def load_masks_from_folder(folder, max_num):
     images = {}
     for i, filename in enumerate(sorted(os.listdir(folder))):
         if i == max_num: break
@@ -121,7 +119,7 @@ def make_PN_dset(img_path, targets_path, savedir, max_num, split_ratio):
     images = []
 
     with open(targets_path, "rb") as fp:
-        labels = pickle.load(fp) # list of 100 vectors (lists)
+        labels = pickle.load(fp) # list of vectors (lists)
 
     for i, fn_img in enumerate(sorted(os.listdir(img_path))):
         if i == max_num: break
@@ -140,15 +138,15 @@ def make_PN_dset(img_path, targets_path, savedir, max_num, split_ratio):
 #              max_num=NUM_SAMPLES,
 #              split_ratio=0.15)
 
-fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2)
-for thres in fire_thresholds:
-
-    savedir = f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thres}/data/"
-    if not os.path.exists(savedir):
-        os.makedirs(savedir)
-
-    make_PN_dset(img_path="data/images6179",
-             targets_path=f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/custom_targets/thres{thres}",
-             savedir=savedir,
-             max_num=NUM_SAMPLES,
-             split_ratio=0.15)
+# fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2)
+# for thres in fire_thresholds:
+#
+#     savedir = f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thres}/data/"
+#     if not os.path.exists(savedir):
+#         os.makedirs(savedir)
+#
+#     make_PN_dset(img_path="data/images6179",
+#              targets_path=f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/custom_targets/thres{thres}",
+#              savedir=savedir,
+#              max_num=NUM_SAMPLES,
+#              split_ratio=0.15)

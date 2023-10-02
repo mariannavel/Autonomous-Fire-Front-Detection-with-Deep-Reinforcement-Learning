@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from SegNet.utils import get_mask_arr, get_img_762bands
+from unet.utils import get_mask_arr, get_img_762bands
 import os
 
 MAX_PIXEL_VALUE = 65535 # used to normalize the image
