@@ -9,7 +9,7 @@ from scipy.io import loadmat
 import os
 from unet.utils import get_img_762bands, get_mask_arr
 
-NUM_SAMPLES = 2000 # I have memory error with more than 2000 data (cannot dump)
+NUM_SAMPLES = 6144 # I have memory error with more than 2000 data (cannot dump)
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
     """
@@ -87,11 +87,15 @@ def load_masks_from_folder(folder, max_num):
             images[filename] = img
     return images
 
-def make_PN_SIG_dset(img_path, target_path, max_num, split_ratio):
+def make_PN_SIG_dset(img_path, target_path, max_num, savedir, split_ratio):
     """
     Saves the images and their segmentation masks (targets) as train-test set
     for the training of PatchDrop with Semantic Image Segmentation.
     """
+
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+
     img_filelist = sorted(os.listdir(img_path))
     msk_filelist = sorted(os.listdir(target_path))
 
@@ -106,7 +110,7 @@ def make_PN_SIG_dset(img_path, target_path, max_num, split_ratio):
         masks.append(mask)
         print(f"saved {fn_img}")
 
-    split_and_save(np.asarray(images), np.asarray(masks), split_ratio=split_ratio)
+    split_and_save(np.asarray(images), np.asarray(masks), savedir, split_ratio=split_ratio)
 
 def make_PN_dset(img_path, targets_path, savedir, max_num, split_ratio):
     """
@@ -131,12 +135,14 @@ def make_PN_dset(img_path, targets_path, savedir, max_num, split_ratio):
     split_and_save(np.asarray(images), np.asarray(labels), savedir, split_ratio=split_ratio)
 
 
-# seg_masks = load_images_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
+# if __name__ == "__main__":
+# seg_masks = load_masks_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
 #
 # make_PN_SIG_dset(img_path="data/images6179",
 #              target_path=f"data/voting_masks6179",
 #              max_num=NUM_SAMPLES,
-#              split_ratio=0.15)
+#              savedir= f"data/{NUM_SAMPLES}/mask_labels/rand_sampled/",
+#              split_ratio=0.2)
 
 # fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2)
 # for thres in fire_thresholds:

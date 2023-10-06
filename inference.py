@@ -2,11 +2,11 @@ import torch
 from utils import utils
 from utils.custom_dataloader import LandsatDataset
 import numpy as np
-from SegNet.unet_models_pytorch import get_model_pytorch
+from unet.unet_models_pytorch import get_model_pytorch
 from segnet import *
-from visualize import visualize_image, visualize_images
+from utils.visualize import visualize_image, visualize_images
 
-LR_size = 16 # PN input dims
+LR_size = 32 # PN input dims
 NUM_SAMPLES = 1000
 
 def inference(model, images, mappings, patch_size):
@@ -97,18 +97,65 @@ def compute_metrics(preds, targets):
     iou = IoU(preds, targets)
     return dc, iou
 
-if __name__ == "__main__":
+def thres_exp_main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     thresval = 0.04
 
     # Load images on which the policy network was NOT trained
-    images, _ = load_images_PN(datapath=f'pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thresval}/data/test.pkl')
+    images, _ = load_images_PN(
+        datapath=f'pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thresval}/data/test.pkl')
 
     # Feed them to PN and save the produced masks
     masked_images = get_model_results(images,
-                    model='ResNet_Landsat8',
-                    ckpt_path=f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thresval}/checkpoints/PN_pretrain_E_20_F1_0.000",
+                                      model='ResNet_Landsat8',
+                                      ckpt_path=f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thresval}/checkpoints/PN_pretrain_E_20_F1_0.000",
+                                      device=device,
+                                      mode="Test")
+
+    # load masked images as tensors
+    # masked_images = torch.from_numpy(np.load("pretrainPN/masked_images.npy")).permute(0,3,1,2)
+    masked_images = torch.from_numpy(masked_images).permute(0, 3, 1, 2)
+
+    # load U-Net
+    unet = get_model_pytorch(model_name='unet', n_filters=16, n_channels=3)
+    # load weights
+    unet.load_state_dict(torch.load('train_agent/Landsat-8/unet/pytorch_unet.pt'))
+    unet.eval()
+
+    # Give masked images to U-Net and get their segment. mask
+    batch_size = 32
+    masked_batches = [masked_images[i:i + batch_size] for i in range(0, len(masked_images), batch_size)]
+    preds = []  # compute in batches because of memory limitations
+    for batch in masked_batches:
+        with torch.no_grad():
+            batch_preds = get_SegNet_prediction(batch, unet, device)
+        preds.append(batch_preds)
+    final_preds = torch.cat(preds)
+    # preds = get_SegNet_prediction(masked_images, unet, device)
+    # visualize_image(preds.cpu().permute(0,2,3,1))
+
+    # Load the target segment. masks of the original images
+    _, targets = load_images_PD_SIS(datapath=f'data/{NUM_SAMPLES}/test.pkl')
+    targets = targets.permute(0, 3, 1, 2).to(device)
+
+    # Evaluate test performance
+    dc, iou = compute_metrics(final_preds, targets)
+
+    print("--- Evaluation of the custom-label ResNet on 15 samples ---")
+    print(f"Dice: {torch.mean(dc)} | IoU: {torch.mean(iou)}")
+
+
+if __name__ == "__main__":
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    images, targets = load_images_PD_SIS(datapath=f'data/{NUM_SAMPLES}/test.pkl')
+    targets = targets.permute(0, 3, 1, 2).to(device)
+
+    # Feed them to PN and save the produced masks
+    masked_images = get_model_results(images,
+                    model='ResNet18_Landsat8',
+                    ckpt_path=f"train_agent/{NUM_SAMPLES}/batch_sz_256_LR_32/checkpoints/Policy_ckpt_E_1000_R_0.402_Res",
                     device=device,
                     mode="Test")
 
@@ -123,23 +170,19 @@ if __name__ == "__main__":
     unet.eval()
 
     # Give masked images to U-Net and get their segment. mask
-    batch_size = 32
-    masked_batches = [masked_images[i:i + batch_size] for i in range(0, len(masked_images), batch_size)]
-    preds = [] # compute in batches because of memory limitations
-    for batch in masked_batches:
-        with torch.no_grad():
-            batch_preds = get_SegNet_prediction(batch, unet, device)
-        preds.append(batch_preds)
-    final_preds = torch.cat(preds)
-    # preds = get_SegNet_prediction(masked_images, unet, device)
+    # batch_size = 32
+    # masked_batches = [masked_images[i:i + batch_size] for i in range(0, len(masked_images), batch_size)]
+    # preds = [] # compute in batches because of memory limitations
+    # for batch in masked_batches:
+    #     with torch.no_grad():
+    #         batch_preds = get_SegNet_prediction(batch, unet, device)
+    #     preds.append(batch_preds)
+    # final_preds = torch.cat(preds)
+    preds = get_SegNet_prediction(masked_images, unet, device)
     # visualize_image(preds.cpu().permute(0,2,3,1))
 
-    # Load the target segment. masks of the original images
-    _, targets = load_images_PD_SIS(datapath=f'data/{NUM_SAMPLES}/test.pkl')
-    targets = targets.permute(0,3,1,2).to(device)
-
     # Evaluate test performance
-    dc, iou = compute_metrics(final_preds, targets)
+    dc, iou = compute_metrics(preds, targets)
 
     print("--- Evaluation of the custom-label ResNet on 15 samples ---")
     print(f"Dice: {torch.mean(dc)} | IoU: {torch.mean(iou)}")

@@ -19,32 +19,32 @@ import torch.optim as optim
 from torch.distributions import Bernoulli
 from utils import utils
 from utils.custom_dataloader import LandsatDataset
-from SegNet.unet_models_pytorch import get_model_pytorch
+from unet.unet_models_pytorch import get_model_pytorch
 # from torchsummary import summary
 from tensorboard_logger import configure
 import torch.backends.cudnn as cudnn
 import matplotlib.pyplot as plt
 import time
-from visualize import visualize_images
+# from utils.visualize import visualize_images
 from segnet import *
 
 cudnn.benchmark = True
 
 CKPT_UNET = 'train_agent/Landsat-8/unet/pytorch_unet.pt'
-NUM_SAMPLES = 1000
+NUM_SAMPLES = 2048
 
 import argparse
 parser = argparse.ArgumentParser(description='Policy Network Training')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-parser.add_argument('--model', default='ResNet_Landsat8', help='R<depth>_<dataset> see utils.py for a list of configurations')
-parser.add_argument('--data_dir', default='data/1000/', help='data directory')
+parser.add_argument('--model', default='ResNet18_Landsat8', help='R<depth>_<dataset> see utils.py for a list of configurations')
+parser.add_argument('--data_dir', default=f'data/{NUM_SAMPLES}/mask_labels/rand_sampled/', help='data directory')
 parser.add_argument('--load', default=None, help='checkpoint to load pretrained agent')
-parser.add_argument('--cv_dir', default='train_agent/1000/', help='configuration directory (models and logs are saved here)')
-parser.add_argument('--batch_size', type=int, default=32, help='batch size') # INCREASED batch size 8 --> 16 --> 32 --> 64 --(2K dset)--> SIGKILL
-parser.add_argument('--max_epochs', type=int, default=1000, help='total epochs to run')
+parser.add_argument('--cv_dir', default=f'train_agent/{NUM_SAMPLES}/', help='configuration directory (models and logs are saved here)')
+parser.add_argument('--batch_size', type=int, default=256, help='batch size') # INCREASED batch size 8 --> 16 --> 32 --> 64 --(2K dset)--> SIGKILL
+parser.add_argument('--max_epochs', type=int, default=2000, help='total epochs to run')
 parser.add_argument('--parallel', action ='store_true', default=False, help='use multiple GPUs for training')
 parser.add_argument('--alpha', type=float, default=0.8, help='probability bounding factor')
-parser.add_argument('--LR_size', type=int, default=16, help='Policy Network Image Size')
+parser.add_argument('--LR_size', type=int, default=32, help='Policy Network Image Size')
 parser.add_argument('--test_interval', type=int, default=10, help='Every how many epoch to test the model')
 parser.add_argument('--ckpt_interval', type=int, default=100, help='Every how many epoch to save the model')
 args = parser.parse_args()

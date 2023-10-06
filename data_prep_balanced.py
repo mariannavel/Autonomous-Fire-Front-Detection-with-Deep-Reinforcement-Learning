@@ -19,9 +19,9 @@ import random
 
 random.seed(42)
 
-NUM_SAMPLES = 1000
+NUM_SAMPLES = 100
 
-def load_data(img_path, msk_path, max_num=2000):
+def load_data_dict(img_path, msk_path, max_num=6179):
     """
     :param img_path: the images path
     :param msk_path: the segmentation masks path
@@ -47,6 +47,24 @@ def load_data(img_path, msk_path, max_num=2000):
 
     return data_dict
 
+def load_images(img_path, max_num=6179):
+    img_filelist = sorted(os.listdir(img_path))
+    images = []
+    for i, fn_img in enumerate(img_filelist):
+        if i == max_num: break
+        img3c = get_img_762bands(os.path.join(img_path, fn_img))
+        images.append(img3c)
+    return images
+
+def load_masks(msk_path, max_num=6179):
+    msk_filelist = sorted(os.listdir(msk_path))
+    masks = []
+    for i, fn_mask in enumerate(msk_filelist):
+        if i == max_num: break
+        mask = get_mask_arr(os.path.join(msk_path, fn_mask))
+        masks.append(mask)
+    return masks
+
 def get_custom_labels(seg_masks, fire_thres=0.05):
     """
     This function returns the labels of Policy Network as binary vectors,
@@ -62,24 +80,24 @@ def get_custom_labels(seg_masks, fire_thres=0.05):
 
     return label_vec
 
-def explore_fire_patches(bin_labels):
+def discriminate_fire_present(bin_labels):
     """
     :param bin_labels: list of binary vector labels
-    :return: f_img_set : <image index, num of fire patches> per fire image
-            nf_img_set : <image index> per non-fire image
+    :return: f_img_tuples : <image index, num of fire patches> per fire image
+            nf_img_idx : <image index> per non-fire image
     """
 
-    f_img_set, nf_img_set = [], []
+    f_img_tuples, nf_img_idx = [], []
 
     # save indexes of fire / non-fire images
     for i, label in enumerate(bin_labels):
         num_fire_patches = sum(label)
         if num_fire_patches == 0:
-            nf_img_set.append(i) # it is a non-fire index
+            nf_img_idx.append(i) # it is a non-fire index
         else:
-            f_img_set.append((i, num_fire_patches)) # fire index
+            f_img_tuples.append((i, num_fire_patches)) # fire index
 
-    return f_img_set, nf_img_set
+    return f_img_tuples, nf_img_idx
 
 def train_test_split(fire_set, non_fire_set, f_prior, nf_prior, num_test):
     """
@@ -104,22 +122,56 @@ def train_test_split(fire_set, non_fire_set, f_prior, nf_prior, num_test):
 
     return train, test
 
+def get_fire_patch_occurr(num_fire):
+    """
+    Returns a dictionary where *keys* are fire patch counts and *values* are
+    the number of images having key number of fire patches.
+    """
+    counts_set = set(num_fire) # unique fire patch counts
+    # dict = {}
+    for f_count in counts_set:
+        print(f"{f_count} fire patches: {num_fire.count(f_count)} occurrences")
+    #     dict[str(f_count)] = num_fire.count(f_count)
+    # return dict
+
+def get_fire_patch_count_sets(fire_img_tuple, images=None):
+    """
+    Returns a dictionary where *keys* are fire patch counts and *values* are
+    the actual images having the corresponding number of fire patches.
+    """
+    fire_indexes, num_fire = [], []
+    for tup in fire_img_tuple:
+        fire_indexes.append(tup[0])
+        num_fire.append(int(tup[1]))
+
+    counts_set = set(num_fire)
+    dict = {}
+    for f_count in counts_set:
+        dict[str(f_count)] = [] # in this list will save the images
+
+    # Add images to the corresponding set
+    for i in fire_indexes:
+        key = num_fire[i]
+        dict[str(key)].append(images[ fire_indexes[i] ]) # --> the fire image
+
+    return dict
+
 def save_dataset(savedir, trainset, testset):
-    with open(savedir + 'train.pkl', 'wb') as f:
+    with open(savedir + 'train_custom.pkl', 'wb') as f:
         pickle.dump(trainset, f)
-    with open(savedir + 'test.pkl', 'wb') as f:
+    with open(savedir + 'test_custom.pkl', 'wb') as f:
         pickle.dump(testset, f)
 
-def balanced_split(fire_img_idx, non_fire_img_idx, targets, test_ratio):
+def balanced_split(fire_img_tuple, non_fire_img_idx, targets, test_ratio):
     """
-    :param fire_img_idx : <image index, num of fire patches> per fire image
+    :param fire_img_tuple : <image index, num of fire patches> per fire image
     :param non_fire_img_idx : <image index> per non-fire image
     :param test_ratio: percentage of test set
     :return: train_set, test_set with proportionally similar label distributions
     """
     images = np.array(data["images"])
 
-    f_count = len(fire_img_idx)
+    f_count = len(fire_img_tuple)
     nf_count = len(non_fire_img_idx)
     f_prior = f_count / len(images)
     nf_prior = nf_count / len(images)
@@ -127,13 +179,13 @@ def balanced_split(fire_img_idx, non_fire_img_idx, targets, test_ratio):
     print("Fire-present images: %.3f \tNon-fire images: %.3f" % (f_prior, nf_prior))
 
     # Randomize fire images set
-    random.shuffle(fire_img_idx)
+    random.shuffle(fire_img_tuple)
 
     # Sample test_ratio for testing and rest for training
 
     num_test = test_ratio * len(images)
     # num_train = len(images) - num_test
-    findex = [tup[0] for tup in fire_img_idx] # separate indexes from fire patch count
+    findex = [tup[0] for tup in fire_img_tuple] # separate indexes from fire patch count
 
     X_train, X_test = train_test_split(images[findex], images[non_fire_img_idx], f_prior, nf_prior, num_test)
     y_train, y_test = train_test_split(targets[findex], targets[non_fire_img_idx], f_prior, nf_prior, num_test)
@@ -143,18 +195,46 @@ def balanced_split(fire_img_idx, non_fire_img_idx, targets, test_ratio):
 
     return trainset, testset
 
+def stratify_multi_split(fire_patch_sets):
+    """
+    :param fire_patch_sets --> *keys* are num fire patches, *values* are the images
+    :return: trainset, testset --> stratified, randomized
+    """
 
-if __name__ == "__main__":
+    return
 
-    data = load_data(img_path="data/images6179", msk_path="data/voting_masks6179")
+def dset_make():
+    data = load_data_dict(img_path="data/images6179", msk_path="data/voting_masks6179")
 
     data["bin_vec_labels"] = get_custom_labels(data["masks"], fire_thres=0.01)
 
-    fire_img_set, non_fire_img_set = explore_fire_patches(data["bin_vec_labels"])
+    fire_img_tuples, non_fire_img_idx = discriminate_fire_present(bin_vec_labels)
 
-    masks = np.array(data["masks"])
+    # masks = np.array(data["masks"])
     bin_labels = np.array(data["bin_vec_labels"])
 
-    trainset, testset = balanced_split(fire_img_set, non_fire_img_set, targets=masks, test_ratio=0.15)
+    trainset, testset = balanced_split(fire_img_tuples, non_fire_img_idx, targets=bin_labels, test_ratio=0.20)
 
     save_dataset(f"data/balanced_splits/{NUM_SAMPLES}/", trainset, testset)
+
+
+if __name__ == "__main__":
+
+    masks = load_masks(msk_path="data/voting_masks100", max_num=100)
+    images = load_images(img_path="data/images100")
+
+    bin_vec_labels = get_custom_labels(masks, fire_thres=0.01)
+
+    fire_img_tuples, non_fire_img_idx = discriminate_fire_present(bin_vec_labels)
+    # --> Landsat-8 Europe dataset has only fire-present images !
+
+    # Get the image set of each fire patch count
+    fire_patch_sets = get_fire_patch_count_sets(fire_img_tuples, images)
+
+    trainset, testset = stratify_multi_split(fire_patch_sets)
+
+    # masks = np.array(data["masks"])
+    # bin_labels = np.array(bin_vec_labels)
+
+    # trainset, testset = balanced_split(fire_img_set, non_fire_img_set, targets=bin_labels, test_ratio=0.20)
+
