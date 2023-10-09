@@ -9,7 +9,7 @@ from scipy.io import loadmat
 import os
 from unet.utils import get_img_762bands, get_mask_arr
 
-NUM_SAMPLES = 6144 # I have memory error with more than 2000 data (cannot dump)
+NUM_SAMPLES = 2048 # I have memory error with more than 2000 data (cannot dump)
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
     """
@@ -51,7 +51,7 @@ def train_test_split(data, labels, test_size):
     """
 
     num_samples = len(data)
-    num_test_samples = int(test_size * num_samples)
+    num_test_samples = int(np.ceil(test_size * num_samples))
     # shuffled_indices = np.random.permutation(num_samples)
     test_indices = np.arange(0, num_test_samples)
     train_indices = np.arange(num_test_samples, num_samples)
@@ -135,14 +135,14 @@ def make_PN_dset(img_path, targets_path, savedir, max_num, split_ratio):
     split_and_save(np.asarray(images), np.asarray(labels), savedir, split_ratio=split_ratio)
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
 # seg_masks = load_masks_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
-#
-# make_PN_SIG_dset(img_path="data/images6179",
-#              target_path=f"data/voting_masks6179",
-#              max_num=NUM_SAMPLES,
-#              savedir= f"data/{NUM_SAMPLES}/mask_labels/rand_sampled/",
-#              split_ratio=0.2)
+
+    make_PN_SIG_dset(img_path="data/images6179",
+             target_path=f"data/voting_masks6179",
+             max_num=NUM_SAMPLES,
+             savedir= f"data/{NUM_SAMPLES}/mask_labels/rand_sampled/",
+             split_ratio=0.15)
 
 # fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2)
 # for thres in fire_thresholds:
