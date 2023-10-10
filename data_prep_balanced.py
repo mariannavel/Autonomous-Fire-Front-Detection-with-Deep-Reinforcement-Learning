@@ -11,15 +11,19 @@ count fire patches of fire-present (prepei na exoun >= 1) --> calc. mean, std --
 """
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 from unet.utils import get_img_762bands, get_mask_arr
 from custom_labeling import split_in_patches, count_fire_pixels, get_label
-from utils.visualize import visualize_image
+from utils.visualize import visualize_image, visualize_images
+from data_prep import train_test_split
 import pickle
 import random
 
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+
 random.seed(42)
 
-NUM_SAMPLES = 100
+NUM_SAMPLES = 4096
 
 def load_data_dict(img_path, msk_path, max_num=6179):
     """
@@ -99,7 +103,7 @@ def discriminate_fire_present(bin_labels):
 
     return f_img_tuples, nf_img_idx
 
-def train_test_split(fire_set, non_fire_set, f_prior, nf_prior, num_test):
+def train_test_fire_split(fire_set, non_fire_set, f_prior, nf_prior, num_test):
     """
     Perform train-test split for a single array-like (samples or labels)
     considering fire distribution in the samples.
@@ -122,19 +126,20 @@ def train_test_split(fire_set, non_fire_set, f_prior, nf_prior, num_test):
 
     return train, test
 
-def get_fire_patch_occurr(num_fire):
+def get_fire_patch_occurr(fire_img_tuples):
     """
     Returns a dictionary where *keys* are fire patch counts and *values* are
     the number of images having key number of fire patches.
     """
+    num_fire = [int(tup[1]) for tup in fire_img_tuples]
     counts_set = set(num_fire) # unique fire patch counts
-    # dict = {}
+    dict = {}
     for f_count in counts_set:
         print(f"{f_count} fire patches: {num_fire.count(f_count)} occurrences")
-    #     dict[str(f_count)] = num_fire.count(f_count)
-    # return dict
+        dict[str(f_count)] = num_fire.count(f_count)
+    return dict
 
-def get_fire_patch_count_sets(fire_img_tuple, images=None):
+def get_fire_patch_count_sets(fire_img_tuple, images, labels):
     """
     Returns a dictionary where *keys* are fire patch counts and *values* are
     the actual images having the corresponding number of fire patches.
@@ -145,21 +150,23 @@ def get_fire_patch_count_sets(fire_img_tuple, images=None):
         num_fire.append(int(tup[1]))
 
     counts_set = set(num_fire)
-    dict = {}
+    dict_images, dict_labels = {}, {}
     for f_count in counts_set:
-        dict[str(f_count)] = [] # in this list will save the images
+        dict_images[str(f_count)] = [] # in this list will save the images
+        dict_labels[str(f_count)] = []
 
     # Add images to the corresponding set
     for i in fire_indexes:
         key = num_fire[i]
-        dict[str(key)].append(images[ fire_indexes[i] ]) # --> the fire image
+        dict_images[str(key)].append(images[ fire_indexes[i] ]) # --> the fire image
+        dict_labels[str(key)].append(labels[ fire_indexes[i] ])
 
-    return dict
+    return dict_images, dict_labels
 
 def save_dataset(savedir, trainset, testset):
-    with open(savedir + 'train_custom.pkl', 'wb') as f:
+    with open(savedir + 'train.pkl', 'wb') as f:
         pickle.dump(trainset, f)
-    with open(savedir + 'test_custom.pkl', 'wb') as f:
+    with open(savedir + 'test.pkl', 'wb') as f:
         pickle.dump(testset, f)
 
 def balanced_split(fire_img_tuple, non_fire_img_idx, targets, test_ratio):
@@ -187,23 +194,54 @@ def balanced_split(fire_img_tuple, non_fire_img_idx, targets, test_ratio):
     # num_train = len(images) - num_test
     findex = [tup[0] for tup in fire_img_tuple] # separate indexes from fire patch count
 
-    X_train, X_test = train_test_split(images[findex], images[non_fire_img_idx], f_prior, nf_prior, num_test)
-    y_train, y_test = train_test_split(targets[findex], targets[non_fire_img_idx], f_prior, nf_prior, num_test)
+    X_train, X_test = train_test_fire_split(images[findex], images[non_fire_img_idx], f_prior, nf_prior, num_test)
+    y_train, y_test = train_test_fire_split(targets[findex], targets[non_fire_img_idx], f_prior, nf_prior, num_test)
 
     trainset = {"data": X_train, "targets": y_train}
     testset = {"data": X_test, "targets": y_test}
 
     return trainset, testset
 
-def stratify_multi_split(fire_patch_sets):
+def randomize_dataset(X_train, y_train, X_test, y_test):
+    # Randomize training data
+    shuffled_idx = [i for i in range(len(X_train))]
+    random.shuffle(shuffled_idx)
+    X_train = [X_train[i] for i in shuffled_idx]
+    y_train = [y_train[i] for i in shuffled_idx]
+    # Randomize test data
+    shuffled_idx = [i for i in range(len(X_test))]
+    random.shuffle(shuffled_idx)
+    X_test = [X_test[i] for i in shuffled_idx]
+    y_test = [y_test[i] for i in shuffled_idx]
+
+    return X_train, X_test, y_train, y_test
+
+def stratify_multi_split(dict_images, dict_labels, test_ratio):
     """
-    :param fire_patch_sets --> *keys* are num fire patches, *values* are the images
+    :param dict_images --> *keys* are num fire patches, *values* are the images
     :return: trainset, testset --> stratified, randomized
     """
+    X_train_all, y_train_all = [], []
+    X_test_all, y_test_all = [], []
+    for key in dict_images:
+        images = np.array(dict_images[key])
+        labels = np.array(dict_labels[key])
+        # Split each set to train and test
+        X_train, X_test, y_train, y_test = train_test_split(images, labels, test_ratio)
+        X_train_all.extend(X_train)
+        y_train_all.extend(y_train)
+        X_test_all.extend(X_test)
+        y_test_all.extend(y_test)
 
-    return
+    # Randomize sets; otherwise patch keys will be in order
+    X_train, X_test, y_train, y_test = randomize_dataset(X_train_all, y_train_all,
+                                                         X_test_all, y_test_all)
 
-def dset_make():
+    trainset = {"data": np.array(X_train), "targets": np.array(y_train)}
+    testset = {"data": np.array(X_test), "targets": np.array(y_test)}
+    return trainset, testset
+
+def dset_make_randomized():
     data = load_data_dict(img_path="data/images6179", msk_path="data/voting_masks6179")
 
     data["bin_vec_labels"] = get_custom_labels(data["masks"], fire_thres=0.01)
@@ -217,24 +255,34 @@ def dset_make():
 
     save_dataset(f"data/balanced_splits/{NUM_SAMPLES}/", trainset, testset)
 
+def barplot(num_dict):
+    fire_patch_count = list(num_dict.keys())
+    num_images = list(num_dict.values())
+
+    # fig = plt.figure(figsize=(10, 5))
+    plt.bar(fire_patch_count, num_images, color='blue', width=0.5) # width=0.4
+    plt.xlabel("fire patches")
+    plt.ylabel("images")
+    # plt.title("Distribution of fire patches")
+    plt.show()
 
 if __name__ == "__main__":
 
-    masks = load_masks(msk_path="data/voting_masks100", max_num=100)
-    images = load_images(img_path="data/images100")
+    masks = load_masks(msk_path="data/voting_masks6179", max_num=NUM_SAMPLES)
+    images = load_images(img_path="data/images6179", max_num=NUM_SAMPLES)
 
     bin_vec_labels = get_custom_labels(masks, fire_thres=0.01)
 
     fire_img_tuples, non_fire_img_idx = discriminate_fire_present(bin_vec_labels)
     # --> Landsat-8 Europe dataset has only fire-present images !
 
+    num_dict = get_fire_patch_occurr(fire_img_tuples)
+
+    barplot(num_dict)
+
     # Get the image set of each fire patch count
-    fire_patch_sets = get_fire_patch_count_sets(fire_img_tuples, images)
-
-    trainset, testset = stratify_multi_split(fire_patch_sets)
-
-    # masks = np.array(data["masks"])
-    # bin_labels = np.array(bin_vec_labels)
-
-    # trainset, testset = balanced_split(fire_img_set, non_fire_img_set, targets=bin_labels, test_ratio=0.20)
-
+    # dict_images, dict_labels = get_fire_patch_count_sets(fire_img_tuples, images, masks)
+    #
+    # trainset, testset = stratify_multi_split(dict_images, dict_labels, test_ratio=0.15)
+    #
+    # save_dataset(f"data/{NUM_SAMPLES}/mask_labels/stratified/", trainset, testset)
