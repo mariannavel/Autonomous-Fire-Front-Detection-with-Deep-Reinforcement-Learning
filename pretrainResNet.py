@@ -1,7 +1,7 @@
 """
 This file trains the Policy Network standalone with custom targets (saved as binary vectors) .
 To Run on Different Benchmarks:
-    python pretrainPN.py --model ResNet_Landsat8, ResNet18_Landsat8
+    python pretrainResNet.py --model ResNet_Landsat8, ResNet18_Landsat8
        --lr 1e-4
        --cv_dir checkpoint directory
        --batch_size 1048 (Higher is better)
@@ -16,22 +16,21 @@ import torch.optim as optim
 from utils import utils
 from utils.custom_dataloader import LandsatDataset
 from tensorboard_logger import configure, log_value
-from visualize import visualize_image
 from sklearn.metrics import f1_score
 import numpy as np
 import pickle
 import argparse
 
-NUM_SAMPLES = 1000
+NUM_SAMPLES = 1024
 
 parser = argparse.ArgumentParser(description='Policy Network Pre-training')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--model', default='ResNet_Landsat8')
-parser.add_argument('--data_dir', default=f'pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres0.04/data/', help='data directory')
-parser.add_argument('--cv_dir', default=f'pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres0.04/', help='configuration directory (models and logs are saved here)')
-parser.add_argument('--batch_size', type=int, default=64, help='batch size')
+parser.add_argument('--data_dir', default=f'pretrainResNet/{NUM_SAMPLES}/thres0.01/data/', help='data directory')
+parser.add_argument('--cv_dir', default=f'pretrainResNet/{NUM_SAMPLES}/thres0.01/', help='configuration directory (models and logs are saved here)')
+parser.add_argument('--batch_size', type=int, default=128, help='batch size')
 parser.add_argument('--max_epochs', type=int, default=20, help='total epochs to run')
-parser.add_argument('--LR_size', type=int, default=16, help='Policy Network Image Size')
+parser.add_argument('--LR_size', type=int, default=32, help='Policy Network Image Size')
 parser.add_argument('--test_interval', type=int, default=1, help='Every how many epoch to test the model')
 parser.add_argument('--ckpt_interval', type=int, default=20, help='Every how many epoch to save the model')
 args = parser.parse_args()
@@ -162,8 +161,8 @@ if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # Load the images and targets
-    trainset = LandsatDataset(args.data_dir+f'train.pkl')
-    testset = LandsatDataset(args.data_dir+f'test.pkl')
+    trainset = LandsatDataset(args.data_dir+'train.pkl')
+    testset = LandsatDataset(args.data_dir+'test.pkl')
 
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     testloader = DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)

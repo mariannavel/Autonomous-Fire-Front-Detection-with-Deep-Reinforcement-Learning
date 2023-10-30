@@ -8,8 +8,11 @@ from scipy.io import loadmat
 # from sklearn.model_selection import train_test_split
 import os
 from unet.utils import get_img_762bands, get_mask_arr
+from utils.visualize import visualize_image
 
-NUM_SAMPLES = 2048 # I have memory error with more than 2000 data (cannot dump)
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+
+NUM_SAMPLES = 1024
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
     """
@@ -82,9 +85,19 @@ def load_masks_from_folder(folder, max_num):
     images = {}
     for i, filename in enumerate(sorted(os.listdir(folder))):
         if i == max_num: break
-        img = get_mask_arr(os.path.join(folder, filename)) #cv2.imread(os.path.join(folder,filename))
+        img = get_mask_arr(os.path.join(folder, filename))
         if img is not None:
             images[filename] = img
+    return images
+
+def load_images(img_path, max_num=6179):
+    img_filelist = sorted(os.listdir(img_path))
+    images = []
+    for i, fn_img in enumerate(img_filelist):
+        if i == max_num: break
+        img3c = get_img_762bands(os.path.join(img_path, fn_img))
+        if img3c is not None:
+            images.append(img3c)
     return images
 
 def make_PN_SIG_dset(img_path, target_path, max_num, savedir, split_ratio):
@@ -108,29 +121,27 @@ def make_PN_SIG_dset(img_path, target_path, max_num, savedir, split_ratio):
         mask = get_mask_arr(os.path.join(target_path, fn_mask)) # mask path
         images.append(img3c)
         masks.append(mask)
-        print(f"saved {fn_img}")
+        # print(f"saved {fn_img}")
+
+    # from data_prep_balanced import load_masks, load_images
+    # masks2 = load_masks(msk_path="data/voting_masks100", max_num=NUM_SAMPLES)
+    # images2 = load_images(img_path="data/images100", max_num=NUM_SAMPLES)
+    # images2.extend(images)
+    # masks2.extend(masks)
 
     split_and_save(np.asarray(images), np.asarray(masks), savedir, split_ratio=split_ratio)
 
-def make_PN_dset(img_path, targets_path, savedir, max_num, split_ratio):
+def make_custom_dset(img_path, targets_path, savedir, max_num, split_ratio):
     """
     Takes the images path and the PN targets' path and saves them as train-test set
     for the training of Policy Network standalone.
     :param img_path: the path of the dataset images
     :param targets_path: the path of the binary vector custom targets
     """
-
-    images = []
-
     with open(targets_path, "rb") as fp:
         labels = pickle.load(fp) # list of vectors (lists)
 
-    for i, fn_img in enumerate(sorted(os.listdir(img_path))):
-        if i == max_num: break
-        img3c = get_img_762bands(os.path.join(img_path, fn_img))  # give the image path
-        # label = labels[fn_img.replace('RT_', 'RT_Voting_')]
-        images.append(img3c)
-        # print(f"saved {fn_img}")
+    images = load_images(img_path, max_num=max_num)
 
     split_and_save(np.asarray(images), np.asarray(labels), savedir, split_ratio=split_ratio)
 
@@ -138,21 +149,21 @@ def make_PN_dset(img_path, targets_path, savedir, max_num, split_ratio):
 if __name__ == "__main__":
 # seg_masks = load_masks_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
 
-    make_PN_SIG_dset(img_path="data/images6179",
-             target_path=f"data/voting_masks6179",
-             max_num=NUM_SAMPLES,
-             savedir= f"data/{NUM_SAMPLES}/mask_labels/rand_sampled/",
-             split_ratio=0.15)
+    # make_PN_SIG_dset(img_path="data/images6179",
+    #          target_path=f"data/voting_masks6179",
+    #          max_num=NUM_SAMPLES,
+    #          savedir= f"data/{NUM_SAMPLES}/mask_labels/rand_sampled/",
+    #          split_ratio=0.15)
 
-# fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2)
-# for thres in fire_thresholds:
-#
-#     savedir = f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thres}/data/"
-#     if not os.path.exists(savedir):
-#         os.makedirs(savedir)
-#
-#     make_PN_dset(img_path="data/images6179",
-#              targets_path=f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/custom_targets/thres{thres}",
-#              savedir=savedir,
-#              max_num=NUM_SAMPLES,
-#              split_ratio=0.15)
+    fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05)
+    for thres in fire_thresholds:
+
+        savedir = f"pretrainResNet/{NUM_SAMPLES}/thres{thres}/data/"
+        if not os.path.exists(savedir):
+            os.makedirs(savedir)
+
+        make_custom_dset(img_path="data/images6179/",
+                 targets_path=f"pretrainResNet/{NUM_SAMPLES}/custom_targets/thres{thres}",
+                 savedir=savedir,
+                 max_num=NUM_SAMPLES,
+                 split_ratio=0.15)

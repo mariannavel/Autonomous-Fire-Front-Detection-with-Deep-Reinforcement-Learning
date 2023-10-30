@@ -15,11 +15,11 @@ def visualize_image(set, title=''):
         plt.tight_layout()
         plt.show()
 
-def visualize_images(images, masks, title="", savepath=""):
+def visualize_images(img1, img2, title="", savepath=""):
     # input ndarray: n x 256 x 256 x 3
     # 1, 4, 6, 9, 10, 13, 19, 21, 26, 33, 38, 42, 55, 58, 66, 67 --> fire present (train)
     # 69, 70, 78, 80, 82 -> fire present (test)
-    for i, (img, msk) in enumerate(zip(images, masks)):
+    for i, (img, msk) in enumerate(zip(img1, img2)):
         plt.subplot(1, 2, 1)
         plt.imshow(img)
         plt.axis('off')
@@ -28,8 +28,8 @@ def visualize_images(images, masks, title="", savepath=""):
         plt.axis('off')
         plt.suptitle(title)
         plt.tight_layout()
-        # plt.show()
-        plt.savefig(f"{savepath}myplot{i}")
+        plt.show()
+        # plt.savefig(f"{savepath}myplot{i}")
 
 def plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR, I_HR_patch, M_HR_patch):
     """

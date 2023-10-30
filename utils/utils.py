@@ -1,16 +1,17 @@
 import os
 import torch
-import torch.nn as nn
 import torchvision.transforms as transforms
-import torchvision.datasets as torchdata
-import torchvision.models as torchmodels
 from tensorboard_logger import log_value
 import numpy as np
+import pickle
 import shutil
-
 # from random import randint, sample
-from utils.custom_dataloader import CustomDatasetFromImages, LandsatDataset, LandsatSubset
+from utils.custom_dataloader import LandsatDataset
 import matplotlib.pyplot as plt
+
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+
+CKPT_UNET = 'train_agent/Landsat-8/unet/pytorch_unet.pt'
 
 def save_args(__file__, args):
     shutil.copy(os.path.basename(__file__), args.cv_dir)
@@ -35,7 +36,7 @@ def binarize_masks(M_LR_vec):
     # I need to take the complement of the last column
     return [not val for val in last_col]
 
-def save_performance_stats(actions, rewards, dc, stats_dict):
+def get_performance_stats(actions, rewards, dc, stats_dict):
     """
     Save all performance metrics from a single epoch in stats_dict.
     :param actions: [list] the binary action set
@@ -60,6 +61,12 @@ def save_performance_stats(actions, rewards, dc, stats_dict):
 
     return avg_reward, avg_dc, sparsity, variance
 
+def save_stats(cv_dir, train_stats, test_stats, num_samples):
+    with open(f"{cv_dir}train{num_samples}_epoch2000", "wb") as fp:
+        pickle.dump(train_stats, fp)
+    with open(f"{cv_dir}test{num_samples}_epoch2000", "wb") as fp:
+        pickle.dump(test_stats, fp)
+
 def compute_reward(preds, targets, policy, penalty):
     # Reward function favors policies that drops patches only if the classifier
     # successfully categorizes the image
@@ -77,23 +84,7 @@ def compute_reward(preds, targets, policy, penalty):
 
 def get_transforms(dset):
 
-    if dset=='Landsat8':
-        mean = [0.485, 0.456, 0.406]
-        std = [0.229, 0.224, 0.225]
-        transform_train = transforms.Compose([
-            # transforms.resise(224),
-            transforms.RandomCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std)
-        ])
-        transform_test = transforms.Compose([
-            # transforms.resize(224),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std)
-        ])
-
-    elif dset=='C10' or dset=='C100':
+    if dset=='C10' or dset=='C100':
         mean = [x/255.0 for x in [125.3, 123.0, 113.9]]
         std = [x/255.0 for x in [63.0, 62.1, 66.7]]
         transform_train = transforms.Compose([
@@ -273,7 +264,7 @@ def save_logs(epoch, avg_reward, avg_dc, sparsity, variance, mode="test"):
 
 def save_agent_model(epoch, args, agent, reward, dice):
 
-    agent_state_dict = agent.module.state_dict() if args.parallel else agent.state_dict()
+    agent_state_dict = agent.state_dict()
     state = {
         'agent': agent_state_dict,
         'epoch': epoch,

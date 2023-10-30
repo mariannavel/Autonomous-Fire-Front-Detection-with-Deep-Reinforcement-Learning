@@ -53,7 +53,7 @@ def compute_SegNet_reward(preds, targets, policy, device):
 
     return reward.unsqueeze(1), dice
 
-def get_SegNet_prediction(images, unet, device):
+def get_unet_prediction(images, unet, device):
     TH_FIRE = 0.25
     # keras_unet = get_model_keras(model_name='unet',
     #                              input_height=IMAGE_SIZE[0], input_width=IMAGE_SIZE[1],

@@ -190,17 +190,19 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         if x.shape[0] > 1:
-            x = self.layer4(x) # skip it when test with one image / changed also line 144 and removed all bn layers
+            x = self.layer4(x) # skip it when test with one image
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
-        if activation:
+        if activation == "sigmoid":
             x = torch.sigmoid(x)
+        elif activation == "softmax":
+            x = nn.functional.softmax(x, dim=1)
 
         return x
 
-    def forward(self, x, activation=True):
+    def forward(self, x, activation="sigmoid"):
         return self._forward_impl(x, activation)
 
 
