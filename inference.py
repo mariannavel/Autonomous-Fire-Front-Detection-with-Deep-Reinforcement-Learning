@@ -1,13 +1,14 @@
-import torch
 from utils import utils
 from utils.custom_dataloader import LandsatDataset
-import numpy as np
 from unet.unet_models_pytorch import get_model_pytorch
 from segnet import *
 from utils.visualize import visualize_image, visualize_images
 
 LR_size = 32 # PN input dims
-NUM_SAMPLES = 1000
+HR_size = 256
+NUM_SAMPLES = 100
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def inference(model, images, mappings, patch_size):
     """ Get the agent masked images from input,
@@ -98,18 +99,17 @@ def compute_metrics(preds, targets):
     return dc, iou
 
 def thres_exp_main():
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    thresval = 0.04
+    thresval = 0.05
 
     # Load images on which the policy network was NOT trained
     images, _ = load_images_PN(
-        datapath=f'pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thresval}/data/test.pkl')
+        datapath=f'pretrainResNet/{NUM_SAMPLES}/thres{thresval}/data/test.pkl')
 
     # Feed them to PN and save the produced masks
     masked_images = get_model_results(images,
                                       model='ResNet_Landsat8',
-                                      ckpt_path=f"pretrainPN/threshold_experiment/{NUM_SAMPLES}/thres{thresval}/checkpoints/PN_pretrain_E_20_F1_0.000",
+                                      ckpt_path=f"pretrainResNet/{NUM_SAMPLES}/thres{thresval}/checkpoints/PN_pretrain_E_20_F1_0.000",
                                       device=device,
                                       mode="Test")
 
@@ -129,33 +129,33 @@ def thres_exp_main():
     preds = []  # compute in batches because of memory limitations
     for batch in masked_batches:
         with torch.no_grad():
-            batch_preds = get_SegNet_prediction(batch, unet, device)
+            batch_preds = get_unet_prediction(batch, unet, device)
         preds.append(batch_preds)
     final_preds = torch.cat(preds)
     # preds = get_SegNet_prediction(masked_images, unet, device)
     # visualize_image(preds.cpu().permute(0,2,3,1))
 
     # Load the target segment. masks of the original images
-    _, targets = load_images_PD_SIS(datapath=f'data/{NUM_SAMPLES}/test.pkl')
+    _, targets = load_images_PD_SIS(datapath=f'data/{NUM_SAMPLES}/rand_sampled/test.pkl')
     targets = targets.permute(0, 3, 1, 2).to(device)
 
     # Evaluate test performance
     dc, iou = compute_metrics(final_preds, targets)
 
-    print("--- Evaluation of the custom-label ResNet on 15 samples ---")
+    print("--- Evaluation of the custom-label ResNet on test samples ---")
     print(f"Dice: {torch.mean(dc)} | IoU: {torch.mean(iou)}")
 
+# thres_exp_main()
 
-if __name__ == "__main__":
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+def deepRLinfer():
 
-    images, targets = load_images_PD_SIS(datapath=f'data/{NUM_SAMPLES}/test.pkl')
+    images, targets = load_images_PD_SIS(datapath=f'data/{NUM_SAMPLES}/stratified/test.pkl')
     targets = targets.permute(0, 3, 1, 2).to(device)
 
     # Feed them to PN and save the produced masks
     masked_images = get_model_results(images,
                     model='ResNet18_Landsat8',
-                    ckpt_path=f"train_agent/{NUM_SAMPLES}/batch_sz_256_LR_32/checkpoints/Policy_ckpt_E_1000_R_0.402_Res",
+                    ckpt_path=f"train_agent/{NUM_SAMPLES}/rand_sampled/checkpoints/Policy_ckpt_E_2400_R_0.444_Res",
                     device=device,
                     mode="Test")
 
@@ -178,11 +178,34 @@ if __name__ == "__main__":
     #         batch_preds = get_SegNet_prediction(batch, unet, device)
     #     preds.append(batch_preds)
     # final_preds = torch.cat(preds)
-    preds = get_SegNet_prediction(masked_images, unet, device)
+    preds = get_unet_prediction(masked_images, unet, device)
     # visualize_image(preds.cpu().permute(0,2,3,1))
 
     # Evaluate test performance
     dc, iou = compute_metrics(preds, targets)
 
-    print("--- Evaluation of the custom-label ResNet on 15 samples ---")
+    print("--- Evaluation of the custom-label ResNet on test samples ---")
     print(f"Dice: {torch.mean(dc)} | IoU: {torch.mean(iou)}")
+
+# deepRLinfer()
+def no_patch_sampling():
+    x_hr, targets = load_images_PD_SIS(datapath=f'data/{NUM_SAMPLES}/stratified/test.pkl')
+    targets = targets.permute(0, 3, 1, 2).to(device)
+    x_hr = x_hr.permute(0, 3, 1, 2).to(device)
+
+    # sub-sample
+    # inputs = inputs.float().permute(0, 3, 1, 2)
+    # targets = targets.float().permute(0, 3, 1, 2)
+    x_lr = torch.nn.functional.interpolate(x_hr.clone(), (LR_size, LR_size))
+
+    # up-sample
+    x_hr_up = torch.nn.functional.interpolate(x_lr.clone(), (HR_size, HR_size))
+
+    unet = get_model_pytorch(model_name='unet', n_filters=16, n_channels=3)
+    # load weights
+    unet.load_state_dict(torch.load('train_agent/Landsat-8/unet/pytorch_unet.pt'))
+    unet.eval()
+
+    # infer
+
+no_patch_sampling()
