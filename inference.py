@@ -2,13 +2,17 @@ from utils import utils
 from utils.custom_dataloader import LandsatDataset
 from unet.unet_models_pytorch import get_model_pytorch
 from segnet import *
-from utils.visualize import visualize_image, visualize_images
+from utils.visualize import inference_results_grid, visualize_images
+import pickle
+import torch
 
 LR_size = 32 # PN input dims
 HR_size = 256
-NUM_SAMPLES = 100
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+# Get agent action space
+mappings, _, patch_size = utils.action_space_model('Landsat8')
 
 def inference(model, images, mappings, patch_size):
     """ Get the agent masked images from input,
@@ -75,9 +79,6 @@ def get_model_results(images, model, ckpt_path, device, mode="Test"):
     PolicyNetwork = utils.get_model(model)
     state_dict = torch.load(ckpt_path, map_location=torch.device('cpu'))
     PolicyNetwork.load_state_dict(state_dict["agent"])
-
-    # Get agent action space
-    mappings, _, patch_size = utils.action_space_model('Landsat8')
 
     masked_images = inference(PolicyNetwork, images, mappings, patch_size).to(device)
 
@@ -154,8 +155,8 @@ def deepRLinfer():
 
     # Feed them to PN and save the produced masks
     masked_images = get_model_results(images,
-                    model='ResNet18_Landsat8',
-                    ckpt_path=f"train_agent/{NUM_SAMPLES}/rand_sampled/checkpoints/Policy_ckpt_E_2400_R_0.444_Res",
+                    model='ResNet_Landsat8',
+                    ckpt_path=f"train_agent/{NUM_SAMPLES}/",
                     device=device,
                     mode="Test")
 
@@ -188,10 +189,36 @@ def deepRLinfer():
     print(f"Dice: {torch.mean(dc)} | IoU: {torch.mean(iou)}")
 
 # deepRLinfer()
-def no_patch_sampling():
+
+def rand_sample_patches(x_hr_up, fire_distr):
+    # model patch distribution
+
+    probs = [value/NUM_SAMPLES for value in fire_distr.values()]
+
+    choices = []
+    # randomly sample as many times as there are images
+    for _ in range(len(x_hr_up)):
+        how_many = np.random.choice(a=list(fire_distr.keys()), size=1, p=probs)
+        which = np.random.choice(a=np.arange(16), size=int(how_many[0]), p=None, replace=False) # sample uniformly
+        # np.array of 16 selections --> to tensor
+        one_hot_which = []
+        for index in which:
+            one_hot_which.append(torch.nn.functional.one_hot(torch.tensor(index), num_classes=16))
+
+        one_hot_choices = one_hot_which[0].clone()
+        for i in range(1, len(one_hot_which)):
+            one_hot_choices += one_hot_which[i]
+
+        choices.append(one_hot_choices.tolist())
+
+    masked_image = utils.get_agent_masked_image(x_hr_up, torch.tensor(choices), mappings, patch_size)
+
+    return masked_image
+
+def patch_sampling_infer(mode="no"):
     x_hr, targets = load_images_PD_SIS(datapath=f'data/{NUM_SAMPLES}/stratified/test.pkl')
-    targets = targets.permute(0, 3, 1, 2).to(device)
-    x_hr = x_hr.permute(0, 3, 1, 2).to(device)
+    targets = targets.permute(0, 3, 1, 2)#.to(device)
+    x_hr = x_hr.permute(0, 3, 1, 2)#.to(device)
 
     # sub-sample
     # inputs = inputs.float().permute(0, 3, 1, 2)
@@ -201,11 +228,46 @@ def no_patch_sampling():
     # up-sample
     x_hr_up = torch.nn.functional.interpolate(x_lr.clone(), (HR_size, HR_size))
 
+    if mode == "stochastic":
+        with open(f"data/EDA/fp_dict{NUM_SAMPLES}.pkl", 'rb') as f:
+            fire_distr = pickle.load(f)
+        x_up_masked = rand_sample_patches(x_hr, fire_distr)
+
     unet = get_model_pytorch(model_name='unet', n_filters=16, n_channels=3)
     # load weights
     unet.load_state_dict(torch.load('train_agent/Landsat-8/unet/pytorch_unet.pt'))
     unet.eval()
 
-    # infer
+    preds = get_unet_prediction(x_up_masked, unet, device='cpu')
 
-no_patch_sampling()
+    dc, iou = compute_metrics(preds, targets)
+
+    print(f"Dice: {torch.mean(dc)} | IoU: {torch.mean(iou)}")
+
+
+NUM_SAMPLES = 100
+data_path = f'data/{NUM_SAMPLES}/stratified/test.pkl'
+ckpt_path = f"train_agent/{NUM_SAMPLES}/stratified/checkpoints/Policy_ckpt_E_4300_R_0.450_Res"
+
+
+images, targets = load_images_PD_SIS(datapath=data_path)
+targets = targets.permute(0, 3, 1, 2) #.to(device)
+
+# Feed them to PN and save the produced masks
+masked_images = get_model_results(images,
+                model='ResNet_Landsat8',
+                ckpt_path=ckpt_path,
+                device=device,
+                mode="Test")
+
+# load masked images as tensors
+# masked_images = torch.from_numpy(np.load("pretrainPN/masked_images.npy")).permute(0,3,1,2)
+masked_images = torch.from_numpy(masked_images).permute(0,3,1,2)
+
+# indexes = [9, 12 , 73, 15, 19, 25, 28, 39, 47, 79, 89, 114, 130, 136, 160, 172, 197, 152, 74, 80]
+for i in range(len(images)):
+    inference_results_grid(images[i-1], masked_images[i-1].permute(1,2,0), targets[i-1].permute(1,2,0))
+
+# for i in range(50):
+#     visualize_images(targets.permute(0,2,3,1)[i][None,:,:,:], masked_images.permute(0,2,3,1)[i][None,:,:,:], title="original vs masked")
+

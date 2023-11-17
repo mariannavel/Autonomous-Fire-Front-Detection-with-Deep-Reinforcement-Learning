@@ -31,6 +31,31 @@ def visualize_images(img1, img2, title="", savepath=""):
         plt.show()
         # plt.savefig(f"{savepath}myplot{i}")
 
+
+def inference_results_grid(HR_img, masked_HR_img, target):
+    # plt.figure(figsize=(16, 10))
+    plt.subplots(1, 3, figsize=(9, 3))
+
+    plt.subplot(1, 3, 1)
+    plt.imshow(HR_img)
+    # plt.title("HR image")
+    plt.axis('off')
+
+    plt.subplot(1, 3, 2)
+    plt.imshow(masked_HR_img)
+    # plt.title("Masked HR image")
+    plt.axis('off')
+
+    plt.subplot(1, 3, 3)
+    plt.imshow(target)
+    # plt.title("Segmentation mask")
+    plt.axis('off')
+
+    # plt.suptitle(title)
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_img_pipeline(I_LR, I_HR, M_LR_map, M_LR, I_HR_patch, M_HR_patch):
     """
     Plot image of initial .mat dataset through the pipeline.

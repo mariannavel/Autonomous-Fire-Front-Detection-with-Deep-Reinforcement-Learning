@@ -6,8 +6,9 @@ import pickle
 
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
-logdir_rand = f"train_agent/512/random_split/"
-logdir_strat = f"train_agent/512/stratified/Res/"
+NUM_SAMPLES = 512
+logdir = f"pretrainedResNet/{NUM_SAMPLES}/thres0.05/"
+# logdir_strat = f"train_agent/512/stratified/Res/"
 # logdir_strat2 = f"train_agent/256/stratified/R_bsz64"
 # logdir_strat3 = f"train_agent/256/stratified/R_bsz128"
 
@@ -18,12 +19,25 @@ def load_data(logdir, fname1, fname2):
         test_stats = pkl.load(fp)
     return train_stats, test_stats
 
-def plot_stat(stat, title):
-    plt.figure()
-    plt.semilogy(stat)
-    plt.xlabel('Epochs')
-    plt.title(title)
-    plt.grid(linestyle=':', which='both')
+def plot_2stats(stat1, stat2):
+    plt.rc('font', size=12)
+    plt.rc('axes', labelsize=14)
+    plt.subplots(1, 2, figsize=(9, 4))
+
+    plt.subplot(1, 2, 1)
+    plt.xlabel('Loss')
+    plt.plot(stat1)
+    plt.grid(True)
+
+    plt.subplot(1, 2, 2)
+    plt.xlabel('F-score')
+    plt.plot(stat2)
+    plt.grid(True)
+
+    plt.suptitle(F'training on {NUM_SAMPLES}-sample dataset with fire threshold 5%')
+    plt.tight_layout()
+
+    # plt.grid(linestyle=':', which='both')
     plt.show()
 
 def plot_moving_avg(stats, title):
@@ -170,8 +184,10 @@ def concatenate_stats(stats1, stats2):
     return stats1
 
 if __name__ == "__main__":
-    train_rand, test_rand = load_data(logdir_rand,"train512", "test512")
-    train_strat, test_rand = load_data(logdir_strat, "train512_epoch2000", "test512_epoch2000")
+    train_stats, test_stats = load_data(logdir,"train_stats_E20", "test_stats_E20")
+    # train_strat, test_rand = load_data(logdir_strat, "train512_epoch2000", "test512_epoch2000")
+
+    plot_2stats(train_stats["loss"], train_stats["F-score"])
 
     # train_strat32, test_strat = load_data(logdir_strat1, "train256_epoch2000", "test256_epoch2000")
     # train_strat64, test_strat = load_data(logdir_strat2, "train256", "test256")
@@ -183,8 +199,8 @@ if __name__ == "__main__":
     # plot_stat(train_stats["variance"], "Variance")
     # plot_moving_avg_grid(train_strat["return"], train_strat["dice"], train_strat["sparsity"])
 
-    rand_stats = [train_rand["return"], train_rand["dice"], train_rand["sparsity"]]
-    strat_stats = [train_strat["return"], train_strat["dice"], train_strat["sparsity"]]
-    plot_rand_vs_stratified_grid(rand_stats, strat_stats)
+    # rand_stats = [train_rand["return"], train_rand["dice"], train_rand["sparsity"]]
+    # strat_stats = [train_strat["return"], train_strat["dice"], train_strat["sparsity"]]
+    # plot_rand_vs_stratified_grid(rand_stats, strat_stats)
 
     # plot3curves(train_strat32["sparsity"], train_strat64["sparsity"], train_strat128["sparsity"])

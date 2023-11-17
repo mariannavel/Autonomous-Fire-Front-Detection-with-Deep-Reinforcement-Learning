@@ -357,6 +357,8 @@ if __name__ == "__main__":
 
     barplot(dict_6179)
 
+    # barplot_norm: normalized y axonas na paraxw pmf me shmeia, kai ta 3/2 datasets
+
     # dict_6179 = load_dict("data/EDA/fp_dict6179.pkl")
     # dict_1024 = load_dict("data/EDA/fp_dict1024.pkl")
     # dict_512 = load_dict("data/EDA/fp_dict512.pkl")

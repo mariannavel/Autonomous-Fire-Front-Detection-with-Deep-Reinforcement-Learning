@@ -18,7 +18,7 @@ from torch.distributions import Bernoulli
 from utils import utils
 from utils.custom_dataloader import LandsatDataset
 from unet.unet_models_pytorch import get_model_pytorch
-from torchsummary import summary
+# from torchsummary import summary
 from tensorboard_logger import configure
 import torch.backends.cudnn as cudnn
 import matplotlib.pyplot as plt
