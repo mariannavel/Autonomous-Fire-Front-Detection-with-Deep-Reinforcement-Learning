@@ -4,7 +4,7 @@ import numpy as np
 MAX_PIXEL_VALUE = 65535  # used to normalize the image
 TH_FIRE = 0.25  # fire threshold
 
-def visualize_image(set, title=''):
+def visualize_images(set, title=''):
     # input ndarray: 256 x 256 x 3
     for image in set:
         plt.imshow(image)
@@ -13,7 +13,7 @@ def visualize_image(set, title=''):
         plt.tight_layout()
         plt.show()
 
-def visualize_images(img1, img2, title="", savepath=""):
+def visualize_image_pairs(img1, img2, title="", savepath=""):
     # input ndarray: n x 256 x 256 x 3
     # 69, 70, 78, 80, 82 -> fire present (test)
     for i, (img, msk) in enumerate(zip(img1, img2)):
@@ -28,6 +28,19 @@ def visualize_images(img1, img2, title="", savepath=""):
         plt.show()
         # plt.savefig(f"{savepath}myplot{i}")
 
+def visualize_img3c_mask(img3c, mask):
+    img3c = img3c.float().permute(2, 1, 0)
+    mask = mask.float().permute(2, 1, 0)
+    # mask = torch.unsqueeze(mask[0] > 0, dim=0) # make it binary
+    mask = mask > TH_FIRE
+    plt.subplot(1, 2, 1)
+    plt.imshow(img3c.detach().numpy())
+    plt.title('Original image 3c')
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(mask.detach().numpy())
+    plt.title('Voting mask (target)')
+    plt.show()
 
 def plot_inference_grid(HR_img, masked_HR_img, target):
     # plt.figure(figsize=(16, 10))

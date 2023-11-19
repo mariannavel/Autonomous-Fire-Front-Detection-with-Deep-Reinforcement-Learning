@@ -1,19 +1,19 @@
 import numpy as np
 import rasterio
-import os
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-from unet.unet_models_keras import get_model_keras
-from unet.unet_models_pytorch import get_model_pytorch
+from models.unet_models_keras import get_model_keras
+from models.unet_models_pytorch import get_model_pytorch
+from utils.visualize import visualize_img3c_mask
 
-MAX_PIXEL_VALUE = 65535 # Max. pixel value, used to normalize the image
+MAX_PIXEL_VALUE = 65535 # used to normalize the image
 IMAGE_SIZE = (256, 256)
 N_CHANNELS = 3
 N_FILTERS = 16
 TH_FIRE = 0.25
-
-WEIGHTS_FILE = '../cv/tmp/Landsat-8/unet/unet_voting_final_weights.h5'
+WEIGHTS_FILE = 'unet_voting_final_weights.h5'
+MASK_ALGORITHM = 'voting'
+ARCHITECTURE = 'unet_{}f_2conv_{}'.format(N_FILTERS, '10c' if N_CHANNELS == 10 else '762' )
 
 def get_img_arr(path):
     img = rasterio.open(path).read().transpose((1, 2, 0))
@@ -30,30 +30,12 @@ def get_img_762bands(path):
     img = np.float32(img) / MAX_PIXEL_VALUE
     return img
 
-def visualize_dataset3c(path='data/images'):
-    # iterate over files in that path
-    for i, filename in enumerate(os.listdir(path)):
-        img = os.path.join(path, filename)
-        img3c = get_img_762bands(img) # 3 channels
-        plt.imshow(img3c)
-        plt.title("Image"+str(i))
-        plt.show()
-
-def visualize_with_seg_mask(img3c, mask):
-    # permute for visualization purposes
-    img3c = img3c.float().permute(2, 1, 0)
-    mask = mask.float().permute(2, 1, 0)
-    # mask = torch.unsqueeze(mask[0] > 0, dim=0) # make it binary
-    mask = mask > TH_FIRE
-    plt.subplot(1, 2, 1)
-    plt.imshow(img3c.detach().numpy())
-    plt.title('Original image 3c')
-
-    plt.subplot(1, 2, 2)
-    plt.imshow(mask.detach().numpy())
-    plt.title('Voting mask (target)')
-
-    plt.show()
+def test_unet(img_path, pytorch_unet):
+    img3c = torch.from_numpy(get_img_762bands(img_path)) # in 3 channels
+    # y_pred = keras_unet.predict(np.array([img3c]), batch_size=1)
+    img3c = torch.unsqueeze(img3c, 0).permute(0, 3, 1, 2)
+    y_pred = pytorch_unet.forward(img3c)
+    visualize_img3c_mask(img3c[0], y_pred[0])
 
 def keras2pytorch_model(keras_model, pytorch_model):
     keras_unet = get_model_keras(model_name='unet',

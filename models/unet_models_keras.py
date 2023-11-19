@@ -1,9 +1,3 @@
-"""
-Edw pera (einai entelws malakes) exoune valei tis arxitektonikes 10c, 3c kai light 3c
-se ena arxeio ola kai to exoune kanei replicate to idio se olous tous fakelous.
-Egw toses meres nomizw oti trexw to light 3c kai trexw to 3c.
-"""
-
 from keras.models import *
 from keras.layers import *
 

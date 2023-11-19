@@ -19,12 +19,10 @@ class FCN(nn.Module):
         # Block 1
         x = nn.ReLU()(self.block1_conv1(x))
         x = nn.ReLU()(self.block1_conv2(x))
-        f1 = x
 
         # Block 2
         x = nn.ReLU()(self.block2_conv1(x))
         x = nn.ReLU()(self.block2_conv2(x))
-        f2 = x
 
         out = nn.ReLU()(self.out(x))
 
