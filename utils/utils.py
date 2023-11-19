@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
+CKPT_UNET = 'models/weights/pytorch_unet.pt'
+
 def save_args(__file__, args):
     shutil.copy(os.path.basename(__file__), args.cv_dir)
     with open(args.cv_dir+'/args.txt','w') as f:
