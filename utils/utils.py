@@ -2,7 +2,7 @@ import os
 import torch
 import torchvision.transforms as transforms
 from tensorboard_logger import log_value
-from models import resnet
+from models import policy_net
 import pickle
 import shutil
 import matplotlib.pyplot as plt
@@ -132,12 +132,12 @@ def get_action_space():
 def get_model(model):
 
     if model == 'CNN':
-        agent = resnet.CNNPolicyNet()
+        agent = policy_net.ConvNet()
 
     elif model == 'ResNet':
-        agent = resnet.ResNet(resnet.BasicBlock, [1, 1, 1, 1], 16)  # block, layers, num_classes
+        agent = policy_net.ResNet(policy_net.BasicBlock, [1, 1, 1, 1], 16)  # block, layers, num_classes
 
     elif model == 'ResNet18':
-        agent = resnet.resnet18(num_classes=16)
+        agent = policy_net.resnet18(num_classes=16)
 
     return agent
