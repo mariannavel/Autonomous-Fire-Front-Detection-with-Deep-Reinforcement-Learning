@@ -255,9 +255,9 @@ def resnet101(pretrained=False, progress=True, **kwargs):
                    **kwargs)
 
 
-class CNNPolicy(nn.Module):
+class CNNPolicyNet(nn.Module):
     def __init__(self, num_classes=16):
-        super(CNNPolicy, self).__init__()
+        super(CNNPolicyNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
         self.conv3 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
