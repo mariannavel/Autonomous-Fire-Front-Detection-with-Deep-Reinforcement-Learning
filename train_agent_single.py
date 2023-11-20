@@ -29,22 +29,22 @@ import argparse
 cudnn.benchmark = True
 
 parser = argparse.ArgumentParser(description='Policy Network Training')
-parser.add_argument('--num_samples', type=int, default=100)
+parser.add_argument('--num_samples', type=int, default=15)
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--model', default='ResNet')
-parser.add_argument('--data_dir', default=f'data/', help='data directory')
+parser.add_argument('--data_dir', default=f'data/toy_dset/', help='data directory')
 parser.add_argument('--load', default=None, help='checkpoint to load pretrained agent')
-parser.add_argument('--cv_dir', default=f'train_agent/checkpoints/', help='models and logs are saved here')
-parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--max_epochs', type=int, default=1000, help='total epochs to run')
+parser.add_argument('--cv_dir', default=f'experiments/train_agent/toy/', help='models and logs are saved here')
+parser.add_argument('--batch_size', type=int, default=8)
+parser.add_argument('--max_epochs', type=int, default=200, help='total epochs to run')
 parser.add_argument('--alpha', type=float, default=0.8, help='probability bounding factor')
 parser.add_argument('--LR_size', type=int, default=32, help='agent input image size')
 parser.add_argument('--test_interval', type=int, default=50, help='Every how many epoch to test the model')
 parser.add_argument('--ckpt_interval', type=int, default=100, help='Every how many epoch to save the model')
 args = parser.parse_args()
 
-if not os.path.exists(args.cv_dir + '/checkpoints'):
-    os.makedirs(args.cv_dir + '/checkpoints')
+if not os.path.exists(args.cv_dir + 'checkpoints'):
+    os.makedirs(args.cv_dir + 'checkpoints')
 agent_utils.save_args(__file__, args)
 
 def train(epoch):
@@ -138,7 +138,7 @@ def test(epoch):
 
             probs = agent.forward(inputs_agent.to(device))
 
-            # Sample the test-time policy
+            # test-time policy
             actions = probs.data.clone()
             actions[actions<0.5] = 0.0
             actions[actions>=0.5] = 1.0

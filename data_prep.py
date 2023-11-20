@@ -7,8 +7,7 @@ import pickle
 from scipy.io import loadmat
 # from sklearn.model_selection import train_test_split
 import os
-from unet.utils import get_img_762bands, get_mask_arr
-from utils.visualize import visualize_image
+from utils.unet_utils import get_img_762bands, get_mask_arr
 
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
@@ -16,7 +15,7 @@ NUM_SAMPLES = 1024
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
     """
-    Load .mat dataset of 118 samples in memory.
+    Load .mat dataset samples in memory.
     :param data_dir
     """
     D = loadmat(data_dir+"AFD_data_17_classes.mat")
@@ -81,15 +80,6 @@ def split_and_save(data, labels, savedir="data/", split_ratio=0.2):
     with open(savedir + 'test.pkl', 'wb') as f:
         pickle.dump(testset, f)
 
-def load_masks_from_folder(folder, max_num):
-    images = {}
-    for i, filename in enumerate(sorted(os.listdir(folder))):
-        if i == max_num: break
-        img = get_mask_arr(os.path.join(folder, filename))
-        if img is not None:
-            images[filename] = img
-    return images
-
 def load_images(img_path, max_num=6179):
     img_filelist = sorted(os.listdir(img_path))
     images = []
@@ -100,10 +90,30 @@ def load_images(img_path, max_num=6179):
             images.append(img3c)
     return images
 
-def make_PN_SIG_dset(img_path, target_path, max_num, savedir, split_ratio):
+def load_masks(msk_path, max_num=6179):
+    msk_filelist = sorted(os.listdir(msk_path))
+    masks = []
+    for i, fn_mask in enumerate(msk_filelist):
+        if i == max_num: break
+        mask = get_mask_arr(os.path.join(msk_path, fn_mask))
+        masks.append(mask)
+    return masks
+
+def load_masks_as_dict(folder, max_num):
+    masks = {}
+    for i, filename in enumerate(sorted(os.listdir(folder))):
+        if i == max_num: break
+        img = get_mask_arr(os.path.join(folder, filename))
+        if img is not None:
+            masks[filename] = img
+    return masks
+
+def make_mask_target_dset(img_path, target_path, max_num, savedir, test_ratio):
     """
     Saves the images and their segmentation masks (targets) as train-test set
-    for the training of PatchDrop with Semantic Image Segmentation.
+    for training the policy network in a RL framework.
+    :param img_path: the path of the actual dataset images
+    :param targets_path: the path of the voting mask-targets
     """
 
     if not os.path.exists(savedir):
@@ -121,49 +131,39 @@ def make_PN_SIG_dset(img_path, target_path, max_num, savedir, split_ratio):
         mask = get_mask_arr(os.path.join(target_path, fn_mask)) # mask path
         images.append(img3c)
         masks.append(mask)
-        # print(f"saved {fn_img}")
 
-    # from data_prep_balanced import load_masks, load_images
-    # masks2 = load_masks(msk_path="data/voting_masks100", max_num=NUM_SAMPLES)
-    # images2 = load_images(img_path="data/images100", max_num=NUM_SAMPLES)
-    # images2.extend(images)
-    # masks2.extend(masks)
+    # save them to savedir as train.pkl, test.pkl
+    split_and_save(np.asarray(images), np.asarray(masks), savedir, split_ratio=test_ratio)
 
-    split_and_save(np.asarray(images), np.asarray(masks), savedir, split_ratio=split_ratio)
-
-def make_custom_dset(img_path, targets_path, savedir, max_num, split_ratio):
+def make_custom_target_dset(img_path, targets_path, savedir, max_num, test_ratio=0.15):
     """
-    Takes the images path and the PN targets' path and saves them as train-test set
-    for the training of Policy Network standalone.
-    :param img_path: the path of the dataset images
-    :param targets_path: the path of the binary vector custom targets
+    Saves the images and custom targets as train-test set for training
+    policy network standalone.
+    :param img_path: the path of the actual dataset images
+    :param targets_path: the path of the vector targets
     """
     with open(targets_path, "rb") as fp:
-        labels = pickle.load(fp) # list of vectors (lists)
+        targets = pickle.load(fp) # list of vectors (lists)
 
     images = load_images(img_path, max_num=max_num)
 
-    split_and_save(np.asarray(images), np.asarray(labels), savedir, split_ratio=split_ratio)
+    split_and_save(np.asarray(images), np.asarray(targets), savedir, split_ratio=test_ratio)
 
-
-if __name__ == "__main__":
-# seg_masks = load_masks_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
-
-    # make_PN_SIG_dset(img_path="data/images6179",
-    #          target_path=f"data/voting_masks6179",
-    #          max_num=NUM_SAMPLES,
-    #          savedir= f"data/{NUM_SAMPLES}/mask_labels/rand_sampled/",
-    #          split_ratio=0.15)
-
+def make_threshold_dsets(img_path, targets_path, savedir, test_ratio=0.15):
+    """
+    :param img_path: path of actual Landsat-8 images
+    :param targets_path: path of binary files with custom targets
+    :param savedir: path to save the .pkl datasets
+    :return:
+    """
     fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05)
-    for thres in fire_thresholds:
+    for _ in fire_thresholds:
 
-        savedir = f"pretrainResNet/{NUM_SAMPLES}/thres{thres}/data/"
         if not os.path.exists(savedir):
             os.makedirs(savedir)
 
-        make_custom_dset(img_path="data/images6179/",
-                 targets_path=f"pretrainResNet/{NUM_SAMPLES}/custom_targets/thres{thres}",
-                 savedir=savedir,
-                 max_num=NUM_SAMPLES,
-                 split_ratio=0.15)
+        make_custom_target_dset(img_path=img_path,
+                                targets_path=targets_path,
+                                savedir=savedir,
+                                max_num=NUM_SAMPLES,
+                                split_ratio=test_ratio)
