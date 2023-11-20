@@ -99,6 +99,11 @@ def load_masks(msk_path, max_num=6179):
         masks.append(mask)
     return masks
 
+def load_dict(path):
+    with open(path, 'rb') as f:
+        data = pickle.load(f)
+    return data
+
 def load_masks_as_dict(folder, max_num):
     masks = {}
     for i, filename in enumerate(sorted(os.listdir(folder))):

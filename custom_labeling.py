@@ -1,31 +1,10 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from utils.utils import action_space_model
+from utils.agent_utils import get_action_space
 import pickle
-from data_prep import load_masks_from_folder
+from data_prep import load_masks_as_dict
 import os
 
-NUM_SAMPLES = 256
-
-def plot_pixl_hist(distr, scale="linear"):
-    """
-    Part of EDA.
-    distr: list of number of fire pixels per image
-    scale: "linear" or "log"
-    """
-    hist, bins, _ = plt.hist(distr, bins=len(distr))
-    plt.title("Distribution of fire pixels")
-
-    if scale == "log":
-        plt.close()
-        logbins = np.logspace(np.log10(bins[0]), np.log10(bins[-1]), len(bins))
-        plt.hist(distr, bins=logbins)
-        plt.xscale('log')
-        plt.title("Distribution of fire pixels (log scale)")
-
-    plt.xlabel("image count")
-    plt.ylabel("fire pixel count")
-    plt.show()
+NUM_SAMPLES = 100
 
 def count_fire_pixels(images):
     """
@@ -38,7 +17,6 @@ def count_fire_pixels(images):
         # print(dict(zip(unique, counts)))
         # counts[0]: how many zeros
         # counts[1]: how many ones
-        # visualize_image(bin_arr)
         if len(counts) > 1: # has fire pixels
             img_fire_pixels.append(counts[1])
         else:
@@ -51,7 +29,7 @@ def split_in_patches(mask, N=16):
     Splits the given image in N patches.
     :return: [list] N patches of equal size
     """
-    mappings, img_size, patch_size = action_space_model('Landsat8')
+    mappings, patch_size = get_action_space()
     patches = []
     for i in range(N):
         buf = mappings[i]
@@ -96,7 +74,7 @@ def make_custom_labels(seg_masks, fire_thres, savepath=f"data/custom_targets"):
 
 if __name__ == "__main__":
 
-    seg_masks = load_masks_from_folder("data/voting_masks6179", max_num=NUM_SAMPLES)
+    seg_masks = load_masks_as_dict("data/voting_masks100", max_num=NUM_SAMPLES)
     fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05)
     for thres in fire_thresholds:
         savepath = f"pretrainResNet/{NUM_SAMPLES}/custom_targets/"
