@@ -1,7 +1,6 @@
 from keras.models import *
 from keras.layers import *
 
-# The dropout and batchnorm are ignored, used just to make the signature equals
 def FCN(nClasses, input_height=128, input_width=128, n_filters = 16, dropout = 0.1, batchnorm = True):
     
     
