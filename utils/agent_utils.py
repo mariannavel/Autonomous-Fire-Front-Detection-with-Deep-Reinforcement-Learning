@@ -122,8 +122,8 @@ def get_action_space():
     Model the action space by dividing the image space into equal size patches.
     :return: pixel mappings, img size, patch size
     """
-    img_size = 256
-    patch_size = 64 # 64×64×16 = 256x256
+    img_size = 256 # 64×64×16 = 256x256
+    patch_size = 64 # sqrt( img_size**2 / 16 )
     mappings = []
     for cl in range(0, img_size, patch_size):
         for rw in range(0, img_size, patch_size):
