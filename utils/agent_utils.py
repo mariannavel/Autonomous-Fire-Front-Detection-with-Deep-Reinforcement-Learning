@@ -12,7 +12,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 CKPT_UNET = 'models/weights/pytorch_unet.pt'
 
 def save_args(__file__, args):
-    shutil.copy(os.path.basename(__file__), args.cv_dir)
+    # shutil.copy(os.path.basename(__file__), args.cv_dir)
     with open(args.cv_dir+'/args.txt','w') as f:
         f.write(str(args))
 
@@ -104,7 +104,7 @@ def get_performance_stats(actions, rewards, dc, stats_dict):
 
     return avg_reward, avg_dc, sparsity, variance
 
-def get_agent_masked_image(input_org, policy, mappings, patch_size):
+def get_masked_image(input_org, policy, mappings, patch_size):
     """ Generate masked images w.r.t policy learned by the agent.
     """
     input_full = input_org.clone()
@@ -129,7 +129,7 @@ def get_action_space():
         for rw in range(0, img_size, patch_size):
             mappings.append([cl, rw])
 
-    return mappings, img_size, patch_size
+    return mappings, patch_size
 
 def get_model(model):
 
