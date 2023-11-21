@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from data_prep import load_dict
+from dataset.data_prep import load_dict
 
 def barplot_distr(num_dict, title=""):
     """

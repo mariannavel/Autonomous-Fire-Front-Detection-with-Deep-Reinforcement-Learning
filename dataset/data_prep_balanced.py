@@ -6,8 +6,8 @@ Explore dataset to balance:
 import os
 import numpy as np
 from utils.unet_utils import get_img_762bands, get_mask_arr
-from custom_labeling import split_in_patches, count_fire_pixels, get_label
-from data_prep import train_test_split, load_masks, load_images
+from dataset.custom_labeling import split_in_patches, count_fire_pixels, get_label
+from dataset.data_prep import train_test_split, load_masks, load_images
 import pickle
 import random
 
@@ -218,7 +218,7 @@ def stratify_multi_split(dict_images, dict_labels, test_ratio):
     return trainset, testset
 
 def make_balanced_dset(bin_vec_labels):
-    data = load_data_dict(img_path="data/images6179", msk_path="data/voting_masks6179")
+    data = load_data_dict(img_path="../data/images6179", msk_path="../data/voting_masks6179")
 
     data["bin_vec_labels"] = get_custom_labels(data["masks"], fire_thres=0.01)
 
@@ -241,8 +241,8 @@ def extend_data100(images, masks, num_sample):
     masks1 = [masks[i] for i in sampled_idx]
     images1 = [images[i] for i in sampled_idx]
 
-    masks2 = load_masks(msk_path="data/voting_masks100")
-    images2 = load_images(img_path="data/images100")
+    masks2 = load_masks(msk_path="../data/voting_masks100")
+    images2 = load_images(img_path="../data/images100")
 
     masks2.extend(masks1)
     images2.extend(images1)
@@ -252,8 +252,8 @@ def extend_data100(images, masks, num_sample):
 
 def prep_data_save():
 
-    masks = load_masks(msk_path="data/voting_masks100", max_num=NUM_SAMPLES)
-    images = load_images(img_path="data/images100", max_num=NUM_SAMPLES)
+    masks = load_masks(msk_path="../data/voting_masks100", max_num=NUM_SAMPLES)
+    images = load_images(img_path="../data/images100", max_num=NUM_SAMPLES)
 
     bin_vec_labels = get_custom_labels(masks, fire_thres=0.01)
 

@@ -2,7 +2,7 @@
 This file trains the "Policy Network" standalone with custom targets (saved as binary vectors) .
 
 Train on different configurations:
-    python pretrain_custom.py --model ResNet_Landsat8, ResNet18_Landsat8
+    python pretrain_multilabel.py --model ResNet_Landsat8, ResNet18_Landsat8
        --lr 1e-4
        --cv_dir checkpoint directory
        --batch_size 1048 (Higher is better)
