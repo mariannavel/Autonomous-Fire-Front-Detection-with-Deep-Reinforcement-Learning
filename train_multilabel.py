@@ -2,7 +2,7 @@
 This file trains the "Policy Network" standalone with custom targets (saved as binary vectors) .
 
 Train on different configurations:
-    python pretrain_multilabel.py --model ResNet_Landsat8, ResNet18_Landsat8
+    python train_multilabel.py --model ResNet_Landsat8, ResNet18_Landsat8
        --lr 1e-4
        --cv_dir checkpoint directory
        --batch_size 1048 (Higher is better)
@@ -23,15 +23,15 @@ import pickle
 import argparse
 
 parser = argparse.ArgumentParser(description='Network Supervised Training')
-parser.add_argument('--num_samples', type=int, default=15)
+parser.add_argument('--num_samples', type=int, default=20)
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--model', default='ResNet')
-parser.add_argument('--data_dir', default=f'experiments/pretrain_agent_custom/100/thres0.01/data/', help='data directory')
+parser.add_argument('--data_dir', default=f'dataset/data/100/regular_split/vector_label/', help='data directory')
 parser.add_argument('--cv_dir', default=f'experiments/pretrain_agent_custom/toy/', help='models and logs are saved here')
 parser.add_argument('--batch_size', type=int, default=8)
 parser.add_argument('--max_epochs', type=int, default=20, help='total epochs to run')
 parser.add_argument('--LR_size', type=int, default=32)
-parser.add_argument('--test_interval', type=int, default=1, help='Every how many epoch to test the model')
+parser.add_argument('--test_interval', type=int, default=5, help='Every how many epoch to test the model')
 parser.add_argument('--ckpt_interval', type=int, default=20, help='Every how many epoch to save the model')
 args = parser.parse_args()
 

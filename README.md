@@ -1,24 +1,24 @@
 # Autonomous Fire Front Detection in Satellite Images with Deep Reinforcement Learning
 
-This repository contains the following:
+Files and directories:
 
 - /dataset: explore and prepare the data for training, perform custom labeling
 - /models: Policy Network and U-net models in PyTorch and Keras
 - /utils: functions to get and save data of the agent, utilities for segmentation, visualization-plots, dataloader for Landsat-8
 - train_agent_single.py: train the RL agent with REINFORCE, modeling trajectories with single-step MDPs
 - train_agent_multi.py: train the RL agent with REINFORCE, modeling trajectories with multi-step MDPs (ongoing)
-- pretrain_multilabel.py: train PN with custom (binary vector) labels - can be perceived as a pretraining step for the agent
-- inference.py: 
-- load_stats.py:
+- train_multilabel.py: train PN with custom (binary vector) labels - can be perceived as a pretraining step for the agent
+- inference.py: perform agent/U-net inference, forward data to the deep RL fire detection system, up-sampling & stochastic sampling experiments
+- load_stats.py: load train/test stats to produce figures
 
-To train the agent in order to form policy from scratch, you must run the following:
+To train the agent and form policy from scratch, you must run the following:
 
-python train_agent.py --model ResNet_Landsat8
+python train_agent_single.py --model ResNet
        --lr 1e-3
        --batch_size 64
        --LR_size 8, 16, 32
        --max_epochs 1000
-       --data_dir 'data/'
+       --data_dir 'dataset/data/'
        --cv_dir 'checkpoints/'
        --test_interval 10
        --ckpt_interval 100
