@@ -7,14 +7,13 @@ import torch.utils.data as torchdata
 import tqdm
 import torch.optim as optim
 from torch.distributions import Bernoulli, Categorical, Multinomial
-from utils import utils
+from utils import agent_utils
 from utils.custom_dataloader import LandsatDataset
-from unet.unet_models_pytorch import get_model_pytorch
+from utils.unet_utils import *
 from tensorboard_logger import configure
 import torch.backends.cudnn as cudnn
 import time
 import matplotlib.pyplot as plt
-from segnet import *
 
 random.seed(42)
 cudnn.benchmark = True
@@ -38,7 +37,8 @@ args = parser.parse_args()
 
 if not os.path.exists(args.cv_dir + '/checkpoints'):
     os.makedirs(args.cv_dir + '/checkpoints')
-utils.save_args(__file__, args)
+
+agent_utils.save_args(__file__, args)
 
 def visualize_image(set, title=''):
     # input ndarray: 256 x 256 x 3
@@ -114,7 +114,7 @@ def train(epoch):
         inputs = inputs.to(device)
         targets = targets.to(device)
 
-        inputs, inputs_agent, targets = utils.preprocess_inputs(args.LR_size, inputs, targets)
+        inputs, inputs_agent, targets = agent_utils.get_input_lr(args.LR_size, inputs, targets)
 
         # 1. Input LR image batch to Policy Network
         logits = agent.forward(inputs_agent, activation=None) # softmax: sum(probs)==1
@@ -138,11 +138,11 @@ def train(epoch):
             A += actions
 
             # 3. Apply mask to x_hr
-            x_hr_m = utils.get_agent_masked_image(inputs, A, mappings, patch_size)
+            x_hr_m = agent_utils.get_agent_masked_image(inputs, A, mappings, patch_size)
             visualize_images(x_hr_m.permute(0,2,3,1).cpu(), targets.permute(0,2,3,1).cpu())
 
             # 4. Input x_h^m to U-Net
-            preds = get_unet_prediction(x_hr_m.cpu(), pytorch_unet, device) # get segmentation mask
+            preds = get_prediction(x_hr_m.cpu(), pytorch_unet, device) # get segmentation mask
 
             for i in range(args.batch_size):
                 if i > 0 and len(Rewards[i]) != 0 and Rewards[i][-1] > 0.9: # stop sampling from that image
@@ -171,7 +171,7 @@ def train(epoch):
         exp_rewards.append(E_U)
         action_set.append(A.data.cpu())
 
-    # avg_reward, avg_dc, sparsity, variance = utils.get_performance_stats(action_set, rewards, dice_coefs, train_stats)
+    # avg_reward, avg_dc, sparsity, variance = agent_utils.get_performance_stats(action_set, rewards, dice_coefs, train_stats)
     # avg_rw_baseline = torch.cat(rewards_baseline, 0).mean()
     # train_stats["reward_baseline"].append(avg_rw_baseline)
     #
@@ -193,7 +193,7 @@ def test(epoch):
             inputs.to(device)
             targets.to(device)
 
-            inputs, inputs_agent, targets = utils.preprocess_inputs(args.LR_size, inputs, targets)
+            inputs, inputs_agent, targets = agent_utils.get_input_lr(args.LR_size, inputs, targets)
 
             probs = agent.forward(inputs_agent.to(device))
 
@@ -203,10 +203,10 @@ def test(epoch):
             actions[actions>=0.5] = 1.0
 
             # Get the masked high-res image and perform inference
-            masked_images = utils.get_agent_masked_image(inputs, actions, mappings, patch_size)
-            preds = get_unet_prediction(masked_images.cpu(), pytorch_unet, device)
+            masked_images = agent_utils.get_agent_masked_image(inputs, actions, mappings, patch_size)
+            preds = get_prediction(masked_images.cpu(), pytorch_unet, device)
 
-            reward, dice = compute_SegNet_reward(preds.cpu(), targets, actions.data, device)
+            reward, dice = compute_reward(preds.cpu(), targets, actions.data, device)
 
             rewards.append(reward)
             action_set.append(actions.data)
@@ -214,16 +214,16 @@ def test(epoch):
 
             torch.cuda.empty_cache()
 
-    # utils.save_masked_img_grid(epoch, batch_idx, inputs, "validation")
+    # agent_utils.save_masked_img_grid(epoch, batch_idx, inputs, "validation")
 
-    avg_reward, avg_dc, sparsity, variance = utils.get_performance_stats(action_set, rewards, dice_coef, test_stats)
+    avg_reward, avg_dc, sparsity, variance = agent_utils.get_performance_stats(action_set, rewards, dice_coef, test_stats)
 
     print('Test | Rw: %.3f | Dice: %.3f | S: %.3f | V: %.3f\n'%(avg_reward, avg_dc, sparsity, variance))
 
-    utils.save_logs(epoch, avg_reward, avg_dc, sparsity, variance, mode="test")
+    agent_utils.save_logs(epoch, avg_reward, avg_dc, sparsity, variance, mode="test")
     if epoch % args.ckpt_interval == 0:
-        utils.save_agent_model(epoch, args, agent, avg_reward, avg_dc)
-        utils.save_stats(args.cv_dir, train_stats, test_stats)
+        agent_utils.save_agent_model(epoch, args, agent, avg_reward, avg_dc)
+        agent_utils.save_stats(args.cv_dir, train_stats, test_stats)
 
 #--------------------------------------------------------------------------------------------------------#
 trainset = LandsatDataset(args.data_dir + 'train.pkl')
@@ -237,14 +237,14 @@ testloader = torchdata.DataLoader(testset, batch_size=args.batch_size, shuffle=F
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # 1. Load the Agent
-agent = utils.get_model(args.model)
+agent = agent_utils.get_model(args.model)
 print('Agent loaded')
 
 # Save the log values to the checkpoint directory
 configure(args.cv_dir+'/logs', flush_secs=5)
 
 # Agent Action Space
-mappings, _, patch_size = utils.action_space_model('Landsat8')
+mappings, _, patch_size = agent_utils.get_action_space('Landsat8')
 
 # 2. Load the segmentation network (Unet-Light)
 pytorch_unet = get_model_pytorch(model_name='unet', n_filters=16, n_channels=3)
@@ -252,7 +252,7 @@ pytorch_unet = get_model_pytorch(model_name='unet', n_filters=16, n_channels=3)
 print('U-Net loaded')
 
 # 3. Load the weights (trained on voting scheme)
-pytorch_unet.load_state_dict(torch.load(utils.CKPT_UNET))
+pytorch_unet.load_state_dict(torch.load(agent_utils.CKPT_UNET))
 pytorch_unet.eval() # U-Net must be on cpu, else CUDA out of memory
 print('U-Net weights loaded')
 
@@ -269,8 +269,8 @@ agent.to(device) # next(agent.parameters()).is_cuda
 optimizer = optim.Adam(agent.parameters(), lr=args.lr)
 
 # Store the Expected Value of each statistic for every epoch
-# train_stats = {"return": [], "dice": [], "sparsity": [], "variance": [], "reward_baseline": []}
-# test_stats = {"return": [], "dice": [], "sparsity": [], "variance": []}
+train_stats = {"return": [], "dice": [], "sparsity": [], "variance": [], "reward_baseline": []}
+test_stats = {"return": [], "dice": [], "sparsity": [], "variance": []}
 
 start_time = time.time()
 

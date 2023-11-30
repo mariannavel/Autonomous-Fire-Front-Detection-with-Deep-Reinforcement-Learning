@@ -1,6 +1,6 @@
 import pickle as pkl
 import os
-from plots import *
+from utils.plots import *
 
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 

@@ -1,4 +1,15 @@
-# PatchDrop with Semantic Image Segmentation (PD-SIG)
+# Autonomous Fire Front Detection in Satellite Images with Deep Reinforcement Learning
+
+This repository contains the following:
+
+- /dataset: explore and prepare the data for training, perform custom labeling
+- /models: Policy Network and U-net models in PyTorch and Keras
+- /utils: functions to get and save data of the agent, utilities for segmentation, visualization-plots, dataloader for Landsat-8
+- train_agent_single.py: train the RL agent with REINFORCE, modeling trajectories with single-step MDPs
+- train_agent_multi.py: train the RL agent with REINFORCE, modeling trajectories with multi-step MDPs (ongoing)
+- pretrain_multilabel.py: train PN with custom (binary vector) labels - can be perceived as a pretraining step for the agent
+- inference.py: 
+- load_stats.py:
 
 To train the agent in order to form policy from scratch, you must run the following:
 
