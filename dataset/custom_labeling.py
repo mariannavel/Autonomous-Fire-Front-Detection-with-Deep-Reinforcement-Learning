@@ -5,6 +5,10 @@ from data_prep import load_masks_as_dict
 import os
 
 NUM_SAMPLES = 100
+MSK_PATH = "data/voting_masks100"
+SAVE_PATH = f"data/{NUM_SAMPLES}/regular_split/custom_targets/"
+
+fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05)
 
 def count_fire_pixels(images):
     """
@@ -55,7 +59,7 @@ def get_label(num_fire_pixels, patch_size=64, fire_thres=0.05):
             label[i] = 0
     return label
 
-def make_custom_labels(seg_masks, fire_thres, savepath=f"data/custom_targets"):
+def make_custom_labels(seg_masks, fire_thres, savepath=f"data/custom_targets/"):
     """
     This function returns the labels of Policy Network as binary vectors,
     based on the percentage of fire pixels in each patch.
@@ -74,10 +78,10 @@ def make_custom_labels(seg_masks, fire_thres, savepath=f"data/custom_targets"):
 
 if __name__ == "__main__":
 
-    seg_masks = load_masks_as_dict("data/voting_masks100", max_num=NUM_SAMPLES)
-    fire_thresholds = (0.01, 0.02, 0.03, 0.04, 0.05)
+    if not os.path.exists(SAVE_PATH):
+        os.makedirs(SAVE_PATH)
+
+    seg_masks = load_masks_as_dict(MSK_PATH, max_num=NUM_SAMPLES)
+
     for thres in fire_thresholds:
-        savepath = f"pretrainResNet/{NUM_SAMPLES}/custom_targets/"
-        if not os.path.exists(savepath):
-            os.makedirs(savepath)
-        make_custom_labels(seg_masks, thres, savepath=savepath)
+        make_custom_labels(seg_masks, thres, savepath=SAVE_PATH)

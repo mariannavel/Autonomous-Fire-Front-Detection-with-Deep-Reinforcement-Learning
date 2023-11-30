@@ -104,11 +104,11 @@ def load_dict(path):
         data = pickle.load(f)
     return data
 
-def load_masks_as_dict(folder, max_num):
+def load_masks_as_dict(path, max_num):
     masks = {}
-    for i, filename in enumerate(sorted(os.listdir(folder))):
+    for i, filename in enumerate(sorted(os.listdir(path))):
         if i == max_num: break
-        img = get_mask_arr(os.path.join(folder, filename))
+        img = get_mask_arr(os.path.join(path, filename))
         if img is not None:
             masks[filename] = img
     return masks
