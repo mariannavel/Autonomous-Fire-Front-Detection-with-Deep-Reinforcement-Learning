@@ -16,8 +16,11 @@ os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 random.seed(42)
 
 NUM_SAMPLES = 100
+IMG_PATH = "data/images100"
+MSK_TARGET_PATH = "data/voting_masks100"
+SAVE_PATH = f"data/{NUM_SAMPLES}/stratified/"
 
-def load_data_dict(img_path, msk_path, max_num=6179):
+def load_data_dict(img_path, msk_path, max_num=1024):
     """
     :param img_path: the images path
     :param msk_path: the segmentation masks path
@@ -145,7 +148,7 @@ def save_dataset(savedir, trainset, testset):
     with open(savedir + 'test.pkl', 'wb') as f:
         pickle.dump(testset, f)
 
-def balanced_split(images, fire_img_tuple, non_fire_img_idx, targets, test_ratio):
+def balanced_split(images, fire_img_tuple, non_fire_img_idx, targets, test_ratio=0.15):
     """
     :param fire_img_tuple : <image index, num of fire patches> per fire image
     :param non_fire_img_idx : <image index> per non-fire image
@@ -192,7 +195,7 @@ def randomize_dataset(X_train, y_train, X_test, y_test):
 
     return X_train, X_test, y_train, y_test
 
-def stratify_multi_split(dict_images, dict_labels, test_ratio):
+def stratify_multi_split(dict_images, dict_labels, test_ratio=0.15):
     """
     :param dict_images --> *keys* are num fire patches, *values* are the images
     :return: trainset, testset --> stratified, randomized
@@ -231,7 +234,7 @@ def make_balanced_dset(bin_vec_labels):
 
     save_dataset(f"data/balanced_splits/{NUM_SAMPLES}/", trainset, testset)
 
-def extend_data100(images, masks, num_sample):
+def extend_by100(images, masks, num_sample):
     """ Takes num_sample images/masks from the given dset
     and merges them with the dataset of 100 samples """
 
@@ -250,17 +253,16 @@ def extend_data100(images, masks, num_sample):
     return masks2, images2
 
 
-def prep_data_save():
+if __name__ == "__main__":
 
-    masks = load_masks(msk_path="../data/voting_masks100", max_num=NUM_SAMPLES)
-    images = load_images(img_path="../data/images100", max_num=NUM_SAMPLES)
+    masks = load_masks(msk_path=MSK_TARGET_PATH, max_num=NUM_SAMPLES)
+    images = load_images(img_path=IMG_PATH, max_num=NUM_SAMPLES)
 
     bin_vec_labels = get_custom_labels(masks, fire_thres=0.01)
 
     fire_img_tuples, non_fire_img_idx = discriminate_fire_present(bin_vec_labels)
-    # --> Landsat-8 Europe dataset has only fire-present images !
 
-    dict = get_fire_patch_occurr(fire_img_tuples)
+    # dict = get_fire_patch_occurr(fire_img_tuples)
     # barplot(dict)
 
     # Get the image set of each fire patch count
@@ -268,4 +270,4 @@ def prep_data_save():
 
     trainset, testset = stratify_multi_split(dict_images, dict_labels, test_ratio=0.2)
 
-    save_dataset(f"data/", trainset, testset)
+    save_dataset(SAVE_PATH, trainset, testset)

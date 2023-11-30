@@ -1,7 +1,3 @@
-"""
-This file makes the data preparation before training of the PatchDrop components.
-"""
-
 import numpy as np
 import pickle
 from scipy.io import loadmat
@@ -11,7 +7,11 @@ from utils.unet_utils import get_img_762bands, get_mask_arr
 
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
-NUM_SAMPLES = 1024
+NUM_SAMPLES = 100
+IMG_PATH = "data/images100"
+VEC_TARGET_PATH = f"data/{NUM_SAMPLES}/regular_split/custom_targets/thres0.01"
+MSK_TARGET_PATH = "data/voting_masks100"
+SAVE_PATH = f"data/{NUM_SAMPLES}/regular_split/mask_label/"
 
 def load_mat_data(data_dir = "data/Landsat-8/"):
     """
@@ -113,7 +113,7 @@ def load_masks_as_dict(path, max_num):
             masks[filename] = img
     return masks
 
-def make_mask_target_dset(img_path, target_path, max_num, savedir, test_ratio):
+def make_mask_target_dset(img_path, target_path, savedir, max_num=100, test_ratio=0.15):
     """
     Saves the images and their segmentation masks (targets) as train-test set
     for training the policy network in a RL framework.
@@ -140,7 +140,7 @@ def make_mask_target_dset(img_path, target_path, max_num, savedir, test_ratio):
     # save them to savedir as train.pkl, test.pkl
     split_and_save(np.asarray(images), np.asarray(masks), savedir, split_ratio=test_ratio)
 
-def make_custom_target_dset(img_path, targets_path, savedir, max_num, test_ratio=0.15):
+def make_custom_target_dset(img_path, targets_path, savedir, max_num=100, test_ratio=0.15):
     """
     Saves the images and custom targets as train-test set for training
     policy network standalone.
