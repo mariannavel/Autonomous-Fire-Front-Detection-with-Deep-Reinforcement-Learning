@@ -23,14 +23,11 @@ python train_agent_single.py --model ResNet
        --test_interval 10
        --ckpt_interval 100
 
-Adjust the parameters as you wish depending on the benchmark. Remember to set the variables CKPT_UNET and NUM_SAMPLES before each run.
+Adjust the parameters depending on the benchmark. Remember to set the variables CKPT_UNET and NUM_SAMPLES before each run.
 
 Parameters:
------------
-**model**: 
-- ResNet_Landsat8 is a simple ResNet of 4 layers, each having 1 convolutional block. This is used when we train with few data (<1000).
-- ResNet18_Landsat8 is a ResNet18 (4 layers of 2 blocks each). Used when training with more data.
-- CNN_Landsat8 to run pipeline with a simple CNN of 3 layers as policy network.
+
+**model**: CNN, ResNet (a simple ResNet of 12 layers total), ResNet18
 
 **data_dir**: the data directory
 
@@ -40,9 +37,9 @@ Parameters:
 
 **lr**: the learning rate
 
-**batch_size**: the higher is better when you have a lot of data
+**batch_size**: higher batch size is better when you have a lot of data
 
-**max_epochs**: num of epochs to run
+**max_epochs**: number of epochs to run
 
 **alpha**: the probability bounding factor
 
